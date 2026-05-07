@@ -1,11 +1,503 @@
-﻿export default function BillingPage() {
+import { useState } from 'react';
+import { useApi } from '../hooks/useApi';
+import { useToast } from '../context/ToastContext';
+import api from '../lib/api';
+import Icon from '../components/Icon';
+import Spinner from '../components/Spinner';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const PAYMENT_STATUSES = ['draft', 'open', 'partial', 'paid'];
+const PAYMENT_METHODS  = ['card', 'cash', 'bank_transfer', 'online'];
+const LINE_CATEGORIES  = ['room', 'dining', 'spa', 'bar', 'laundry', 'transport', 'other'];
+
+const STATUS_CONFIG = {
+  draft:   { chip: 'chip-reserved',    label: 'Draft' },
+  open:    { chip: 'chip-occupied',    label: 'Outstanding' },
+  partial: { chip: 'chip-cleaning',    label: 'Partial' },
+  paid:    { chip: 'chip-available',   label: 'Paid' },
+};
+
+const METHOD_LABELS = {
+  card: 'Card', cash: 'Cash', bank_transfer: 'Bank transfer', online: 'Online',
+};
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function fmtCurrency(val) {
+  if (val == null) return '—';
+  return `€${Number(val).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function guestName(inv) {
+  if (!inv.guest) return '—';
+  return [inv.guest.firstName, inv.guest.lastName].filter(Boolean).join(' ') || '—';
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function StatusChip({ status }) {
+  const { chip, label } = STATUS_CONFIG[status] || { chip: 'chip-reserved', label: status };
+  return <span className={`chip ${chip}`}><span className="chip-dot" />{label}</span>;
+}
+
+function SectionHead({ title, caption }) {
   return (
-    <div className="page-head">
-      <div>
-        <p className="eyebrow">Coming soon</p>
-        <h1 className="display">Billing</h1>
-        <p className="sub">This module will be built in an upcoming session.</p>
+    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
+      <h2 className="display" style={{ fontSize: 28, margin: 0 }}>{title}</h2>
+      {caption && <span className="eyebrow">{caption}</span>}
+    </div>
+  );
+}
+
+function FolioRow({ desc, amount, muted }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 12, color: muted ? 'var(--mute)' : 'var(--ink)' }}>
+      <span>{desc}</span>
+      <span className="mono">{fmtCurrency(amount)}</span>
+    </div>
+  );
+}
+
+// ─── Folio / Invoice Detail Panel ─────────────────────────────────────────────
+
+function InvoiceDetail({ invoice: inv, onClose, onUpdated }) {
+  const toast = useToast();
+  const [showAddLine, setShowAddLine] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
+  const [lineForm, setLineForm]       = useState({ description: '', category: 'other', quantity: 1, unitPrice: '' });
+  const [payForm, setPayForm]         = useState({ paymentStatus: inv.paymentStatus, paymentMethod: inv.paymentMethod || 'card', amountPaid: inv.amountPaid || '' });
+  const [saving, setSaving]           = useState(false);
+
+  function setLine(k, v) { setLineForm(f => ({ ...f, [k]: v })); }
+  function setPay(k, v)  { setPayForm(f => ({ ...f, [k]: v })); }
+
+  async function handleAddLine() {
+    if (!lineForm.description || !lineForm.unitPrice) { toast.error('Description and unit price are required.'); return; }
+    setSaving(true);
+    try {
+      await api.post(`/api/invoices/${inv._id}/line-items`, {
+        description: lineForm.description,
+        category:    lineForm.category,
+        quantity:    Number(lineForm.quantity),
+        unitPrice:   Number(lineForm.unitPrice),
+        total:       Number(lineForm.quantity) * Number(lineForm.unitPrice),
+      });
+      toast.success('Line item added.');
+      setShowAddLine(false);
+      setLineForm({ description: '', category: 'other', quantity: 1, unitPrice: '' });
+      onUpdated();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to add line item.');
+    } finally { setSaving(false); }
+  }
+
+  async function handleRemoveLine(index) {
+    try {
+      await api.delete(`/api/invoices/${inv._id}/line-items/${index}`);
+      toast.success('Line item removed.');
+      onUpdated();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Remove failed.');
+    }
+  }
+
+  async function handlePayment() {
+    setSaving(true);
+    try {
+      await api.patch(`/api/invoices/${inv._id}/payment`, {
+        paymentStatus: payForm.paymentStatus,
+        paymentMethod: payForm.paymentMethod,
+        amountPaid:    Number(payForm.amountPaid) || undefined,
+      });
+      toast.success('Payment status updated.');
+      setShowPayment(false);
+      onUpdated();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Payment update failed.');
+    } finally { setSaving(false); }
+  }
+
+  const name = guestName(inv);
+
+  return (
+    <div className="card" style={{ padding: 28 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <div>
+          <div className="eyebrow" style={{ marginBottom: 4 }}>Folio · {inv.invoiceNumber}</div>
+          <h2 className="display" style={{ fontSize: 26, margin: 0 }}>{name}</h2>
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={onClose}><Icon name="close" size={14} /></button>
       </div>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        <StatusChip status={inv.paymentStatus} />
+        {inv.room && <span className="chip chip-reserved">Room {inv.room.roomNumber}</span>}
+      </div>
+
+      {/* Decorative hotel header */}
+      <div style={{ textAlign: 'center', margin: '12px 0 16px' }}>
+        <div style={{ fontFamily: 'var(--serif)', fontSize: 20, fontStyle: 'italic' }}>LuxuryStay</div>
+        <div className="eyebrow" style={{ marginTop: 4, fontSize: 9 }}>Maison Étoile · Côte d'Azur</div>
+      </div>
+      <div className="rule"><div className="dot" /></div>
+
+      {/* Line items */}
+      <div style={{ marginBottom: 8 }}>
+        {(inv.lineItems || []).map((item, i) => (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: 12, borderBottom: '1px solid var(--hairline-2)' }}>
+            <span style={{ flex: 1 }}>{item.description}{item.quantity > 1 ? ` × ${item.quantity}` : ''}</span>
+            <span className="mono" style={{ marginRight: 8 }}>{fmtCurrency(item.total)}</span>
+            <button onClick={() => handleRemoveLine(i)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mute)', padding: '0 4px', fontSize: 14, lineHeight: 1 }}>×</button>
+          </div>
+        ))}
+        {!inv.lineItems?.length && (
+          <div style={{ padding: '12px 0', fontSize: 12, color: 'var(--mute)', fontStyle: 'italic' }}>No line items yet.</div>
+        )}
+      </div>
+
+      {/* Add line item */}
+      {showAddLine ? (
+        <div style={{ background: 'var(--linen)', padding: 16, borderRadius: 2, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+            <div className="field" style={{ gridColumn: '1/-1' }}>
+              <label>Description</label>
+              <input value={lineForm.description} onChange={e => setLine('description', e.target.value)} placeholder="e.g. In-room dining · dinner" autoFocus />
+            </div>
+            <div className="field">
+              <label>Category</label>
+              <select value={lineForm.category} onChange={e => setLine('category', e.target.value)}>
+                {LINE_CATEGORIES.map(c => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>Unit price (€)</label>
+              <input type="number" value={lineForm.unitPrice} onChange={e => setLine('unitPrice', e.target.value)} />
+            </div>
+            <div className="field">
+              <label>Quantity</label>
+              <input type="number" value={lineForm.quantity} onChange={e => setLine('quantity', e.target.value)} min="1" />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowAddLine(false)}>Cancel</button>
+            <button className="btn btn-primary btn-sm" onClick={handleAddLine} disabled={saving}>
+              {saving ? 'Adding…' : 'Add'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button className="btn btn-ghost btn-sm" style={{ marginBottom: 16 }} onClick={() => setShowAddLine(true)}>
+          <Icon name="plus" size={10} />Add line item
+        </button>
+      )}
+
+      <div className="rule"><div className="dot" /></div>
+
+      {/* Totals */}
+      <FolioRow desc="Subtotal"                        amount={inv.subtotal}    muted />
+      <FolioRow desc={`Tourist tax (€${inv.touristTax ?? 0})`} amount={inv.touristTax}  muted />
+      <FolioRow desc={`VAT (${inv.vatRate ?? 10}%)`}  amount={inv.vatAmount}   muted />
+      {inv.amountPaid > 0 && (
+        <FolioRow desc="Amount paid"                   amount={-inv.amountPaid} muted />
+      )}
+
+      <div style={{ borderTop: '1px solid var(--ink)', marginTop: 14, paddingTop: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <span style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase' }}>Total due</span>
+        <span className="display numeral" style={{ fontSize: 32 }}>{fmtCurrency(inv.totalDue)}</span>
+      </div>
+
+      {/* Payment actions */}
+      {showPayment ? (
+        <div style={{ background: 'var(--linen)', padding: 16, borderRadius: 2, marginTop: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+            <div className="field">
+              <label>Payment status</label>
+              <select value={payForm.paymentStatus} onChange={e => setPay('paymentStatus', e.target.value)}>
+                {PAYMENT_STATUSES.map(s => <option key={s} value={s}>{STATUS_CONFIG[s]?.label || s}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>Method</label>
+              <select value={payForm.paymentMethod} onChange={e => setPay('paymentMethod', e.target.value)}>
+                {PAYMENT_METHODS.map(m => <option key={m} value={m}>{METHOD_LABELS[m]}</option>)}
+              </select>
+            </div>
+            <div className="field" style={{ gridColumn: '1/-1' }}>
+              <label>Amount paid (€)</label>
+              <input type="number" value={payForm.amountPaid} onChange={e => setPay('amountPaid', e.target.value)} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowPayment(false)}>Cancel</button>
+            <button className="btn btn-primary btn-sm" onClick={handlePayment} disabled={saving}>
+              {saving ? 'Saving…' : 'Update payment'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+          <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setShowPayment(true)}>
+            <Icon name="edit" size={12} />Update payment
+          </button>
+          {inv.paymentStatus !== 'paid' && (
+            <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => {
+              setPay({ paymentStatus: 'paid', paymentMethod: payForm.paymentMethod, amountPaid: inv.totalDue });
+              setShowPayment(true);
+            }}>
+              Mark as paid
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── New Invoice Modal ────────────────────────────────────────────────────────
+
+function NewInvoiceModal({ onClose, onSaved }) {
+  const toast = useToast();
+  const [reservationId, setReservationId] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  // Live reservation search
+  const [resSearch, setResSearch] = useState('');
+  const { data: resData } = useApi(
+    resSearch.length > 2 ? `/api/reservations?search=${encodeURIComponent(resSearch)}&limit=10` : null,
+    { deps: [resSearch] }
+  );
+  const reservations = resData?.reservations || [];
+
+  async function handleCreate() {
+    if (!reservationId) { toast.error('Select a reservation.'); return; }
+    setSaving(true);
+    try {
+      await api.post('/api/invoices', { reservation: reservationId });
+      toast.success('Invoice generated.');
+      onSaved();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to generate invoice.');
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ width: 440 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+          <div>
+            <div className="eyebrow" style={{ marginBottom: 4 }}>Billing</div>
+            <h2 className="display" style={{ fontSize: 28, margin: 0 }}>New invoice</h2>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}><Icon name="close" size={14} /></button>
+        </div>
+
+        <div className="field" style={{ marginBottom: 8 }}>
+          <label>Search reservation (guest name or confirmation #)</label>
+          <input
+            value={resSearch}
+            onChange={e => { setResSearch(e.target.value); setReservationId(''); }}
+            placeholder="Type to search…"
+            autoFocus
+          />
+        </div>
+
+        {reservations.length > 0 && !reservationId && (
+          <div style={{ border: '1px solid var(--hairline)', borderRadius: 2, marginBottom: 16, maxHeight: 200, overflowY: 'auto' }}>
+            {reservations.map(r => {
+              const name = [r.guest?.firstName, r.guest?.lastName].filter(Boolean).join(' ') || '—';
+              return (
+                <div key={r._id}
+                  onClick={() => { setReservationId(r._id); setResSearch(`${name} · ${r.confirmationNumber || r._id.slice(-6)}`); }}
+                  style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--hairline-2)', fontSize: 13 }}
+                  onMouseOver={e => e.currentTarget.style.background = 'var(--linen)'}
+                  onMouseOut={e => e.currentTarget.style.background = ''}>
+                  <div style={{ fontWeight: 500 }}>{name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--mute)' }}>
+                    {r.confirmationNumber} · Room {r.room?.roomNumber || '—'} · {r.checkIn?.slice(0,10)} → {r.checkOut?.slice(0,10)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {reservationId && (
+          <div style={{ background: 'var(--linen)', padding: '10px 14px', borderRadius: 2, marginBottom: 16, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Icon name="check" size={12} />
+            Reservation selected
+          </div>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleCreate} disabled={saving || !reservationId}
+            style={{ opacity: saving || !reservationId ? 0.6 : 1 }}>
+            {saving
+              ? <><div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Generating…</>
+              : <><Icon name="plus" size={12} />Generate invoice</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function BillingPage() {
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [selected,     setSelected]     = useState(null);
+  const [showNew,      setShowNew]      = useState(false);
+  const [refreshKey,   setRefreshKey]   = useState(0);
+  const [page,         setPage]         = useState(1);
+
+  const params = new URLSearchParams({ page, limit: 20 });
+  if (statusFilter !== 'all') params.set('paymentStatus', statusFilter);
+
+  const { data, loading } = useApi(`/api/invoices?${params}`, { deps: [statusFilter, page, refreshKey] });
+  const invoices   = data?.invoices || [];
+  const total      = data?.total    || 0;
+  const totalPages = data?.pages    || 1;
+
+  // KPI sums from current data
+  const draftTotal = invoices.filter(i => i.paymentStatus === 'draft').reduce((s, i) => s + (i.totalDue || 0), 0);
+  const openTotal  = invoices.filter(i => i.paymentStatus === 'open').reduce((s, i) => s + (i.totalDue || 0), 0);
+
+  async function refreshSelected(id) {
+    try {
+      const res = await api.get(`/api/invoices/${id}`);
+      setSelected(res.data.invoice || res.data);
+    } catch { /**/ }
+    setRefreshKey(k => k + 1);
+  }
+
+  function onUpdated() {
+    if (selected) refreshSelected(selected._id);
+    else setRefreshKey(k => k + 1);
+  }
+
+  function onSaved() { setShowNew(false); setRefreshKey(k => k + 1); }
+
+  return (
+    <div>
+      {/* ── Header ── */}
+      <div className="page-head">
+        <div>
+          <div className="eyebrow" style={{ marginBottom: 14 }}>Billing · folios &amp; invoices</div>
+          <h1 className="display">The <em>ledger.</em></h1>
+          <p className="sub">
+            {fmtCurrency(draftTotal)} in draft folios · {fmtCurrency(openTotal)} outstanding.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button className="btn btn-primary" onClick={() => setShowNew(true)}>
+            <Icon name="plus" size={12} />New invoice
+          </button>
+        </div>
+      </div>
+
+      {/* ── Status filter ── */}
+      <div style={{ marginBottom: 20 }}>
+        <div className="switch">
+          {['all', ...PAYMENT_STATUSES].map(s => (
+            <button key={s} className={statusFilter === s ? 'active' : ''} onClick={() => { setStatusFilter(s); setPage(1); }}>
+              {s === 'all' ? 'All' : STATUS_CONFIG[s]?.label || s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Two-col: table + detail ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: selected ? '1.6fr 1fr' : '1fr', gap: 32 }}>
+        <div>
+          <SectionHead title="Invoices" caption={`${total} total`} />
+
+          {loading ? (
+            <div style={{ padding: 60 }}><Spinner page /></div>
+          ) : !invoices.length ? (
+            <div className="t-wrap" style={{ padding: '40px 24px', textAlign: 'center', color: 'var(--mute)', fontSize: 13 }}>
+              No invoices found.
+            </div>
+          ) : (
+            <div className="t-wrap">
+              <table className="t">
+                <thead>
+                  <tr>
+                    <th>Invoice</th>
+                    <th>Guest</th>
+                    <th>Room</th>
+                    <th>Issued</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.map(inv => {
+                    const isActive = selected?._id === inv._id;
+                    return (
+                      <tr key={inv._id}
+                        onClick={() => setSelected(isActive ? null : inv)}
+                        style={{ cursor: 'pointer', background: isActive ? 'var(--linen)' : '' }}>
+                        <td><span className="mono">{inv.invoiceNumber || '—'}</span></td>
+                        <td style={{ fontWeight: 500 }}>{guestName(inv)}</td>
+                        <td className="numeral" style={{ fontSize: 16 }}>{inv.room?.roomNumber || '—'}</td>
+                        <td>{fmtDate(inv.createdAt)}</td>
+                        <td className="numeral" style={{ fontSize: 16 }}>{fmtCurrency(inv.totalDue)}</td>
+                        <td><StatusChip status={inv.paymentStatus} /></td>
+                        <td style={{ textAlign: 'right' }}>
+                          <button className="btn btn-ghost btn-sm"
+                            onClick={e => { e.stopPropagation(); setSelected(isActive ? null : inv); }}>
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, fontSize: 12, color: 'var(--mute)' }}>
+              <span>Page {page} of {totalPages} · {total} invoices</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-ghost btn-sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>← Prev</button>
+                <button className="btn btn-ghost btn-sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next →</button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Folio detail */}
+        {selected && (
+          <div>
+            <SectionHead
+              title={`Folio · ${selected.invoiceNumber || '—'}`}
+              caption={guestName(selected)}
+            />
+            <InvoiceDetail
+              invoice={selected}
+              onClose={() => setSelected(null)}
+              onUpdated={onUpdated}
+            />
+          </div>
+        )}
+      </div>
+
+      {showNew && (
+        <NewInvoiceModal onClose={() => setShowNew(false)} onSaved={onSaved} />
+      )}
     </div>
   );
 }
