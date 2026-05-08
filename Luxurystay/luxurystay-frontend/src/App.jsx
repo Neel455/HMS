@@ -2,6 +2,14 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppShell from './layouts/AppShell';
 import LoginPage from './pages/LoginPage';
+import GuestPortalPage from './pages/GuestPortalPage';
+
+// Public pages
+import LandingPage      from './pages/public/LandingPage';
+import SuitesPage       from './pages/public/SuitesPage';
+import ContactPage      from './pages/public/ContactPage';
+import GuestBookPage    from './pages/public/GuestBookPage';
+import ConfirmationPage from './pages/public/ConfirmationPage';
 
 // Ops
 import DashboardPage    from './pages/DashboardPage';
@@ -21,17 +29,32 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import StaffPage     from './pages/StaffPage';
 import SettingsPage  from './pages/SettingsPage';
 
-const ADMIN_MGR  = ['admin', 'manager'];
-const DESK       = ['admin', 'manager', 'receptionist'];
-const ALL_STAFF  = ['admin', 'manager', 'receptionist', 'housekeeping', 'maintenance'];
+const ADMIN_MGR = ['admin', 'manager'];
+const DESK      = ['admin', 'manager', 'receptionist'];
+const ALL_STAFF = ['admin', 'manager', 'receptionist', 'housekeeping', 'maintenance'];
 
 export default function App() {
   return (
     <Routes>
-      {/* Public */}
-      <Route path="/login" element={<LoginPage />} />
+      {/* ── Fully public ─────────────────────────────────────────────── */}
+      <Route path="/"        element={<LandingPage />} />
+      <Route path="/suites"  element={<SuitesPage />} />
+      <Route path="/contact" element={<ContactPage />} />
+      <Route path="/book"    element={<GuestBookPage />} />
+      <Route path="/confirm" element={<ConfirmationPage />} />
+      <Route path="/login"   element={<LoginPage />} />
 
-      {/* Protected — all authenticated staff get the shell */}
+      {/* ── Guest portal — standalone (no staff sidebar) ─────────────── */}
+      <Route
+        path="/guest"
+        element={
+          <ProtectedRoute roles={['guest']}>
+            <GuestPortalPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ── Staff panel — AppShell wraps all ops routes ───────────────── */}
       <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
         <Route index element={<Navigate to="/dashboard" replace />} />
 

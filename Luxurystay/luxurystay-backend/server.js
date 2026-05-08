@@ -110,6 +110,9 @@ app.use('/api/reports', require('./routes/reports'));
 // Module 12 — Notifications
 app.use('/api/notifications', require('./routes/notifications'));
 
+// Guest self-service portal
+app.use('/api/guest', require('./routes/guestSelf'));
+
 // Public — Contact form (no auth)
 app.use('/api/contact', require('./routes/contact'));
 
