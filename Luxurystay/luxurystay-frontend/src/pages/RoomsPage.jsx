@@ -63,6 +63,7 @@ function RoomCard({ room, canManage, canChangeStatus, onManage }) {
     maintenance: 'Maintenance in progress',
     available:   'Ready for arrival',
     reserved:    'Reservation pending check-in',
+    occupied:    'Occupied · no reservation on record',
   }[room.status];
 
   return (

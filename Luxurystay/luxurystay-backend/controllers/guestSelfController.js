@@ -41,14 +41,14 @@ exports.getMyReservations = catchAsync(async (req, res, next) => {
   }
 
   const reservations = await Reservation.find({ guest: guest._id })
-    .populate('room', 'number type floor category')
+    .populate('room', 'roomNumber type floor category')
     .sort({ checkInDate: -1 })
     .lean();
 
   const payload = reservations.map(r => ({
     _id:         r._id,
     bookingId:   r.bookingId,
-    room:        r.room,
+    room:        r.room ? { ...r.room, number: r.room.roomNumber } : r.room,
     checkIn:     r.checkInDate,
     checkOut:    r.checkOutDate,
     nights:      r.nights,

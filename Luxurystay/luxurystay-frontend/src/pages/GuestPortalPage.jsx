@@ -484,8 +484,7 @@ export default function GuestPortalPage() {
             {displayStay && (
               <div className="eyebrow" style={{ marginBottom: 14 }}>
                 My Stay
-                {activeStay && safeIndex === 0 && ` · Suite ${activeStay.room?.number || ''}`}
-                {!activeStay && displayStay && ` · Arriving ${fmtShort(displayStay.checkIn)}`}
+                {displayStay?.room?.number && ` · Suite ${displayStay.room.number}`}
               </div>
             )}
             {!displayStay && <div className="eyebrow" style={{ marginBottom: 14 }}>My Stay</div>}
