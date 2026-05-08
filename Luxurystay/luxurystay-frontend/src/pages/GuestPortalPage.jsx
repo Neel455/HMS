@@ -1,5 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { useApi } from '../hooks/useApi';
 import { useToast } from '../context/ToastContext';
@@ -234,146 +235,6 @@ function MaintenanceModal({ onClose, onSubmit }) {
   );
 }
 
-// ─── Feedback form ────────────────────────────────────────────────────────────
-
-function FeedbackForm({ reservations, onDone }) {
-  const toast = useToast();
-  const eligible = reservations.filter(r => r.status === 'checked-out');
-
-  const [resId,   setResId]   = useState(eligible[0]?._id || '');
-  const [rating,  setRating]  = useState(0);
-  const [hover,   setHover]   = useState(0);
-  const [comment, setComment] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  if (eligible.length === 0) {
-    return (
-      <div style={{ border: '1px solid var(--hairline)', padding: '48px 32px', textAlign: 'center', background: 'var(--paper)', maxWidth: 520 }}>
-        <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 8 }}>No completed stays yet</div>
-        <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: 0 }}>Feedback can be submitted after your check-out.</p>
-      </div>
-    );
-  }
-
-  async function submit(e) {
-    e.preventDefault();
-    if (!resId)   { toast.error('Please select a reservation.'); return; }
-    if (!rating)  { toast.error('Please select a star rating.'); return; }
-    if (!comment.trim()) { toast.error('Please write a comment.'); return; }
-    setLoading(true);
-    try {
-      await api.post('/api/guest/feedback', { reservationId: resId, rating, comment });
-      toast.success('Thank you for your feedback!');
-      onDone();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Could not submit feedback.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <form onSubmit={submit} style={{ maxWidth: 520 }}>
-      {eligible.length > 1 && (
-        <div className="field" style={{ marginBottom: 16 }}>
-          <label>Which stay?</label>
-          <select value={resId} onChange={e => setResId(e.target.value)}>
-            {eligible.map(r => (
-              <option key={r._id} value={r._id}>
-                {r.room?.number ? `Room ${r.room.number}` : 'Room TBA'} · {fmtDate(r.checkIn)} – {fmtDate(r.checkOut)}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16, alignItems: 'center' }}>
-        {[1,2,3,4,5].map(n => (
-          <button
-            key={n}
-            type="button"
-            onMouseEnter={() => setHover(n)}
-            onMouseLeave={() => setHover(0)}
-            onClick={() => setRating(n)}
-            style={{
-              fontSize: 28, lineHeight: 1, padding: 0, border: 'none', background: 'none',
-              cursor: 'pointer', color: n <= (hover || rating) ? '#C9A84C' : 'var(--hairline)',
-              transition: 'color 0.1s',
-            }}
-          >★</button>
-        ))}
-        {rating > 0 && (
-          <span style={{ fontSize: 12, color: 'var(--ink-3)', marginLeft: 8 }}>
-            {['','Poor','Fair','Good','Very good','Excellent'][rating]}
-          </span>
-        )}
-      </div>
-      <div className="field" style={{ marginBottom: 16 }}>
-        <label>Your comment</label>
-        <textarea
-          rows={4}
-          value={comment}
-          onChange={e => setComment(e.target.value)}
-          placeholder="Tell us about your stay…"
-          style={{ resize: 'vertical' }}
-        />
-      </div>
-      <button
-        type="submit"
-        className="btn btn-primary"
-        disabled={loading}
-        style={{ opacity: loading ? 0.7 : 1 }}
-      >
-        {loading
-          ? <><div className="spinner" style={{ width: 13, height: 13, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Submitting…</>
-          : <>Submit feedback <Icon name="arrow_right" size={12} /></>}
-      </button>
-    </form>
-  );
-}
-
-// ─── Profile form ─────────────────────────────────────────────────────────────
-
-function ProfileForm({ user }) {
-  const toast = useToast();
-  const { refreshUser } = useAuth();
-  const [name,    setName]    = useState(user.name  || '');
-  const [phone,   setPhone]   = useState(user.phone || '');
-  const [loading, setLoading] = useState(false);
-
-  async function save(e) {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await api.patch('/api/auth/me', { name, phone });
-      await refreshUser();
-      toast.success('Profile updated.');
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Could not update profile.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <form onSubmit={save} style={{ maxWidth: 400 }}>
-      <div className="field" style={{ marginBottom: 14 }}>
-        <label>Full name</label>
-        <input value={name} onChange={e => setName(e.target.value)} />
-      </div>
-      <div className="field" style={{ marginBottom: 14 }}>
-        <label>Email</label>
-        <input value={user.email} disabled style={{ opacity: 0.6 }} />
-      </div>
-      <div className="field" style={{ marginBottom: 20 }}>
-        <label>Phone</label>
-        <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 555 000 0000" />
-      </div>
-      <button type="submit" className="btn btn-primary" disabled={loading} style={{ opacity: loading ? 0.7 : 1 }}>
-        {loading ? 'Saving…' : 'Save changes'}
-      </button>
-    </form>
-  );
-}
 
 // ─── Service button list ──────────────────────────────────────────────────────
 
@@ -396,6 +257,122 @@ const TODAY_ACTIVITIES = [
   { icon: 'leaf',    title: 'Sunset garden walk',      sub: 'Suggested · 19:30' },
 ];
 
+// ─── Reservation detail slide-over ───────────────────────────────────────────
+
+function ReservationDetailPanel({ reservation: r, onClose, onCancel, cancelling }) {
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  if (!r) return null;
+  const grad  = GRAD_MAP[r.room?.type]   || 'linear-gradient(140deg, #C9AE82, #A08054)';
+  const label = TYPE_LABEL[r.room?.type] || r.room?.type || 'Suite';
+  const cancellable = ['pending', 'confirmed'].includes(r.status);
+  const statusStyle = STATUS_STYLE[r.status] || { bg: 'var(--linen)', color: 'var(--ink-3)', label: r.status };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', justifyContent: 'flex-end' }}>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{ position: 'absolute', inset: 0, background: 'rgba(26,24,20,0.35)' }}
+      />
+      {/* Panel */}
+      <div style={{
+        position: 'relative', width: 420, background: 'var(--paper)',
+        borderLeft: '1px solid var(--hairline)', height: '100%',
+        overflowY: 'auto', display: 'flex', flexDirection: 'column',
+      }}>
+        {/* Header */}
+        <div style={{ padding: '28px 28px 20px', borderBottom: '1px solid var(--hairline)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+            <div>
+              <div className="eyebrow" style={{ marginBottom: 6 }}>Reservation details</div>
+              <h2 className="display" style={{ fontSize: 28, margin: 0 }}>{label}</h2>
+            </div>
+            <button
+              onClick={onClose}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--ink-3)' }}
+            >
+              <Icon name="x" size={18} />
+            </button>
+          </div>
+          <span style={{
+            display: 'inline-block', background: statusStyle.bg, color: statusStyle.color,
+            padding: '3px 10px', fontSize: 10, fontWeight: 600,
+            letterSpacing: '0.1em', textTransform: 'uppercase',
+          }}>
+            {statusStyle.label}
+          </span>
+        </div>
+
+        {/* Suite image */}
+        <div style={{ aspectRatio: '16/9', background: grad, position: 'relative', flexShrink: 0 }}>
+          <div style={{
+            position: 'absolute', bottom: 16, left: 20,
+            fontFamily: 'var(--serif)', fontSize: 32, fontStyle: 'italic',
+            color: 'rgba(247,243,236,0.7)',
+          }}>
+            {r.room?.number || label?.charAt(0)}
+          </div>
+        </div>
+
+        {/* Details */}
+        <div style={{ padding: '24px 28px', flex: 1 }}>
+          {[
+            { label: 'Room',      value: r.room?.number ? `Room ${r.room.number}` : 'TBA' },
+            { label: 'Suite type', value: label },
+            { label: 'Check-in',  value: fmtDate(r.checkIn) },
+            { label: 'Check-out', value: fmtDate(r.checkOut) },
+            { label: 'Nights',    value: r.nights ?? '—' },
+            { label: 'Guests',    value: `${r.adults ?? 1} adult${(r.adults ?? 1) !== 1 ? 's' : ''}${r.children > 0 ? ` · ${r.children} child${r.children !== 1 ? 'ren' : ''}` : ''}` },
+            { label: 'Total',     value: `€${Number(r.totalAmount || 0).toLocaleString()}` },
+            { label: 'Deposit',   value: r.depositAmount ? `€${Number(r.depositAmount).toLocaleString()}${r.depositPaid ? ' · Paid' : ' · Pending'}` : '—' },
+          ].map(row => (
+            <div key={row.label} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+              padding: '10px 0', borderBottom: '1px solid var(--hairline-2)', fontSize: 13,
+            }}>
+              <span style={{ color: 'var(--mute)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{row.label}</span>
+              <span style={{ fontWeight: 500 }}>{row.value}</span>
+            </div>
+          ))}
+          {r.specialRequests && (
+            <div style={{ marginTop: 20 }}>
+              <div className="eyebrow" style={{ marginBottom: 8 }}>Special requests</div>
+              <p style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.6, margin: 0 }}>{r.specialRequests}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer — cancel */}
+        {cancellable && (
+          <div style={{ padding: '20px 28px', borderTop: '1px solid var(--hairline)' }}>
+            <p style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 14, lineHeight: 1.5 }}>
+              Free cancellation is available up to 72 hours before arrival.
+            </p>
+            <button
+              onClick={() => onCancel(r._id)}
+              disabled={cancelling}
+              className="btn btn-ghost"
+              style={{
+                width: '100%', justifyContent: 'center',
+                color: 'var(--terracotta)', borderColor: 'var(--terracotta)',
+                opacity: cancelling ? 0.6 : 1,
+              }}
+            >
+              {cancelling
+                ? <><div className="spinner" style={{ width: 13, height: 13, borderWidth: 1.5, borderTopColor: 'var(--terracotta)' }} />Cancelling…</>
+                : <><Icon name="x" size={12} />Cancel this reservation</>}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function GuestPortalPage() {
@@ -403,18 +380,29 @@ export default function GuestPortalPage() {
   const navigate   = useNavigate();
   const toast      = useToast();
 
-  const [activeTab,      setActiveTab]      = useState('reservations');
+  const queryClient = useQueryClient();
   const [serviceModal,   setServiceModal]   = useState(null);
   const [maintModal,     setMaintModal]     = useState(false);
-  const [feedbackDone,   setFeedbackDone]   = useState(false);
+  const [displayIndex,   setDisplayIndex]   = useState(0);
+  const [cancellingId,     setCancellingId]     = useState(null);
+  const [detailReservation, setDetailReservation] = useState(null);
 
   const { data: resData, loading: resLoading } =
     useApi('/api/guest/reservations');
 
   const reservations = resData?.reservations ?? [];
-  const activeStay   = reservations.find(r => r.status === 'checked-in');
-  const upcomingStay = !activeStay && reservations.find(r => ['confirmed', 'pending'].includes(r.status));
-  const displayStay  = activeStay || upcomingStay;
+
+  // Active stay always pinned first; the rest are upcoming/pending sorted by check-in
+  const activeStay = reservations.find(r => r.status === 'checked-in');
+  const upcomingStays = reservations
+    .filter(r => ['confirmed', 'pending'].includes(r.status))
+    .sort((a, b) => new Date(a.checkIn) - new Date(b.checkIn));
+  const displayStays = activeStay
+    ? [activeStay, ...upcomingStays]
+    : upcomingStays;
+
+  const safeIndex   = Math.min(displayIndex, Math.max(displayStays.length - 1, 0));
+  const displayStay = displayStays[safeIndex] || null;
 
   const initials = (user?.name || user?.email || 'G')
     .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
@@ -429,6 +417,22 @@ export default function GuestPortalPage() {
       toast.error(err.response?.data?.message || 'Could not send request.');
     }
   }, [toast]);
+
+  // ── Cancel reservation ────────────────────────────────────────────────────
+  const handleCancelReservation = useCallback(async (reservationId) => {
+    if (!window.confirm('Are you sure you want to cancel this reservation? This cannot be undone.')) return;
+    setCancellingId(reservationId);
+    try {
+      await api.patch(`/api/reservations/${reservationId}/cancel`);
+      toast.success('Reservation cancelled successfully.');
+      setDetailReservation(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/guest/reservations'] });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not cancel reservation.');
+    } finally {
+      setCancellingId(null);
+    }
+  }, [toast, queryClient]);
 
   // ── Maintenance submit ─────────────────────────────────────────────────────
   const handleMaintSubmit = useCallback(async (category, description) => {
@@ -460,6 +464,14 @@ export default function GuestPortalPage() {
           onSubmit={handleMaintSubmit}
         />
       )}
+      {detailReservation && (
+        <ReservationDetailPanel
+          reservation={detailReservation}
+          onClose={() => setDetailReservation(null)}
+          onCancel={handleCancelReservation}
+          cancelling={cancellingId === detailReservation._id}
+        />
+      )}
 
       <section style={{ padding: '60px 64px 80px', maxWidth: 1280, margin: '0 auto' }}>
 
@@ -472,8 +484,8 @@ export default function GuestPortalPage() {
             {displayStay && (
               <div className="eyebrow" style={{ marginBottom: 14 }}>
                 My Stay
-                {activeStay && ` · Suite ${activeStay.room?.number || ''}`}
-                {upcomingStay && ` · Arriving ${fmtShort(upcomingStay.checkIn)}`}
+                {activeStay && safeIndex === 0 && ` · Suite ${activeStay.room?.number || ''}`}
+                {!activeStay && displayStay && ` · Arriving ${fmtShort(displayStay.checkIn)}`}
               </div>
             )}
             {!displayStay && <div className="eyebrow" style={{ marginBottom: 14 }}>My Stay</div>}
@@ -493,25 +505,89 @@ export default function GuestPortalPage() {
         </div>
 
         <p style={{ fontSize: 15, color: 'var(--ink-3)', maxWidth: 540, marginBottom: 36, lineHeight: 1.7 }}>
-          {activeStay
+          {activeStay && safeIndex === 0
             ? 'Below, your stay at a glance — should anything be wanting, the concierge stands ready.'
-            : upcomingStay
-              ? `Your reservation is confirmed. We look forward to welcoming you on ${fmtShort(upcomingStay.checkIn)}.`
+            : displayStay
+              ? `Your reservation is confirmed. We look forward to welcoming you on ${fmtShort(displayStay.checkIn)}.`
               : 'Welcome to your LuxuryStay guest portal. Book a stay or browse your reservation history below.'}
         </p>
 
         {/* ── Stats bar (only when there is a current/upcoming stay) ───── */}
         {displayStay && (
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: 1, background: 'var(--hairline)',
-            border: '1px solid var(--hairline)', marginBottom: 40,
-          }}>
-            <Mini label="Check-out"       value={fmtShort(displayStay.checkOut)} />
-            <Mini label="Nights remaining" value={activeStay ? nightsRemaining(displayStay.checkOut) : displayStay.nights} />
-            <Mini label="Folio · total"   value={`€${Number(displayStay.totalAmount || 0).toLocaleString()}`} />
-            <Mini label="Status"          value={STATUS_STYLE[displayStay.status]?.label || displayStay.status} />
-          </div>
+          <>
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: 1, background: 'var(--hairline)',
+              border: '1px solid var(--hairline)',
+              marginBottom: displayStays.length > 1 ? 12 : 40,
+            }}>
+              <Mini label="Check-out"        value={fmtShort(displayStay.checkOut)} />
+              <Mini label="Nights remaining"  value={activeStay && safeIndex === 0 ? nightsRemaining(displayStay.checkOut) : displayStay.nights} />
+              <Mini label="Folio · total"    value={`€${Number(displayStay.totalAmount || 0).toLocaleString()}`} />
+              <Mini label="Status"           value={STATUS_STYLE[displayStay.status]?.label || displayStay.status} />
+            </div>
+
+            {/* Reservation switcher — only shown when there are multiple stays */}
+            {displayStays.length > 1 && (
+              <div style={{ marginBottom: 40 }}>
+                <div className="eyebrow" style={{ marginBottom: 12 }}>
+                  {displayStays.length} reservations · select to view
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${displayStays.length}, 1fr)`, gap: 10 }}>
+                  {displayStays.map((stay, i) => {
+                    const isSelected = i === safeIndex;
+                    const stayLabel  = TYPE_LABEL[stay.room?.type] || stay.room?.type || 'Suite';
+                    const stayGrad   = GRAD_MAP[stay.room?.type]   || 'linear-gradient(140deg, #C9AE82, #A08054)';
+                    const stayStatus = STATUS_STYLE[stay.status]   || { label: stay.status, color: 'var(--ink-3)' };
+                    return (
+                      <button
+                        key={stay._id || i}
+                        onClick={() => setDisplayIndex(i)}
+                        style={{
+                          display: 'grid', gridTemplateColumns: '56px 1fr', gap: 0,
+                          border: isSelected ? '2px solid var(--brass)' : '1px solid var(--hairline)',
+                          background: isSelected ? 'var(--paper)' : 'var(--ivory)',
+                          cursor: 'pointer', textAlign: 'left', padding: 0, overflow: 'hidden',
+                          transition: 'border-color 0.15s, box-shadow 0.15s',
+                          boxShadow: isSelected ? '0 4px 16px rgba(0,0,0,0.08)' : 'none',
+                        }}
+                      >
+                        {/* Gradient swatch */}
+                        <div style={{ background: stayGrad, position: 'relative', minHeight: 72 }}>
+                          {isSelected && (
+                            <div style={{
+                              position: 'absolute', inset: 0,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }}>
+                              <Icon name="check" size={14} style={{ color: 'rgba(247,243,236,0.9)' }} />
+                            </div>
+                          )}
+                        </div>
+                        {/* Info */}
+                        <div style={{ padding: '12px 16px', borderLeft: isSelected ? '1px solid var(--brass-soft, #D4B896)' : '1px solid var(--hairline)' }}>
+                          <div style={{
+                            fontSize: 12, fontWeight: 600, color: 'var(--ink)',
+                            marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                          }}>
+                            {stayLabel}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 6 }}>
+                            {fmtShort(stay.checkIn)} → {fmtShort(stay.checkOut)}
+                          </div>
+                          <span style={{
+                            fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase',
+                            color: stayStatus.color || 'var(--ink-3)',
+                          }}>
+                            {stayStatus.label}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* ── Main two-column layout ───────────────────────────────────── */}
@@ -519,9 +595,9 @@ export default function GuestPortalPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 32 }}>
 
             {/* Left column */}
-            <div>
-              {/* Today's activities (shown when checked-in) */}
-              {activeStay && (
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {/* Today's activities (shown when checked-in and viewing active stay) */}
+              {activeStay && safeIndex === 0 && (
                 <>
                   <SectionHead
                     title="Today at the house"
@@ -550,7 +626,7 @@ export default function GuestPortalPage() {
 
               {/* Service request panel */}
               <SectionHead title="Request a service" />
-              {activeStay ? (
+              {activeStay && safeIndex === 0 ? (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 8 }}>
                   {SERVICES.map((s, i) => (
                     <button
@@ -574,6 +650,87 @@ export default function GuestPortalPage() {
                   Service requests are available once your stay begins.
                 </p>
               )}
+
+              {/* My Reservations — pushed to bottom so last card aligns with Concierge */}
+              <div id="reservations" style={{ marginTop: 'auto', paddingTop: 40 }}>
+                <SectionHead title="My Reservations" />
+                {resLoading && (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--mute)', fontSize: 13 }}>
+                    <div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5 }} />
+                    Loading reservations…
+                  </div>
+                )}
+                {!resLoading && reservations.length === 0 && (
+                  <div style={{ border: '1px solid var(--hairline)', padding: '36px 24px', textAlign: 'center', background: 'var(--paper)' }}>
+                    <Icon name="calendar" size={28} style={{ color: 'var(--mute)', display: 'block', margin: '0 auto 12px' }} />
+                    <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 6 }}>No reservations yet</div>
+                    <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: '0 0 20px' }}>Make your first reservation and it will appear here.</p>
+                    <button className="btn btn-primary" onClick={() => navigate('/book')}>
+                      Reserve a suite <Icon name="arrow_right" size={12} />
+                    </button>
+                  </div>
+                )}
+                {!resLoading && reservations.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {reservations.map(r => {
+                      const cancellable  = ['pending', 'confirmed'].includes(r.status);
+                      const isCancelling = cancellingId === r._id;
+                      return (
+                        <div key={r._id} style={{ border: '1px solid var(--hairline)', background: 'var(--paper)' }}>
+                          <div
+                            onClick={() => setDetailReservation(r)}
+                            style={{
+                              padding: '16px 20px', display: 'grid',
+                              gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'start',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                                <Icon name="bed" size={13} style={{ color: 'var(--brass)' }} />
+                                <span style={{ fontWeight: 600, fontSize: 14 }}>
+                                  {r.room?.number ? `Room ${r.room.number}` : 'Room TBA'}
+                                </span>
+                                {r.room?.type && (
+                                  <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>
+                                    · {TYPE_LABEL[r.room.type] || r.room.type}
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ display: 'flex', gap: 20, fontSize: 12, color: 'var(--ink-3)', flexWrap: 'wrap' }}>
+                                <span><strong style={{ color: 'var(--ink)' }}>Check-in</strong>&nbsp;{fmtDate(r.checkIn)}</span>
+                                <span><strong style={{ color: 'var(--ink)' }}>Check-out</strong>&nbsp;{fmtDate(r.checkOut)}</span>
+                                {r.totalAmount != null && (
+                                  <span>Total:&nbsp;<strong style={{ color: 'var(--ink)' }}>€{Number(r.totalAmount).toLocaleString()}</strong></span>
+                                )}
+                              </div>
+                            </div>
+                            <StatusBadge status={r.status} />
+                          </div>
+                          {cancellable && (
+                            <div style={{ borderTop: '1px solid var(--hairline-2)', padding: '8px 20px', display: 'flex', justifyContent: 'flex-end' }}>
+                              <button
+                                onClick={() => handleCancelReservation(r._id)}
+                                disabled={isCancelling}
+                                style={{
+                                  background: 'none', border: 'none', cursor: isCancelling ? 'not-allowed' : 'pointer',
+                                  fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase',
+                                  color: 'var(--terracotta)', display: 'flex', alignItems: 'center', gap: 6,
+                                  opacity: isCancelling ? 0.6 : 1, padding: '4px 0',
+                                }}
+                              >
+                                {isCancelling
+                                  ? <><div className="spinner" style={{ width: 11, height: 11, borderWidth: 1.5, borderTopColor: 'var(--terracotta)' }} />Cancelling…</>
+                                  : <><Icon name="x" size={11} />Cancel reservation</>}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Right column */}
@@ -602,7 +759,7 @@ export default function GuestPortalPage() {
                 <button
                   className="btn btn-ghost"
                   style={{ width: '100%', justifyContent: 'center', marginTop: 14 }}
-                  onClick={() => setActiveTab('reservations')}
+                  onClick={() => setDetailReservation(displayStay)}
                 >
                   View full details
                 </button>
@@ -654,6 +811,7 @@ export default function GuestPortalPage() {
               </div>
             </div>
           </div>
+
         ) : (
           /* ── No stay: prompt to book ─────────────────────────────────── */
           <div style={{
@@ -678,119 +836,6 @@ export default function GuestPortalPage() {
           </div>
         )}
 
-        {/* ── Account section (tabs: reservations, feedback, profile) ─── */}
-        <div style={{ marginTop: 64, paddingTop: 40, borderTop: '1px solid var(--hairline)' }}>
-          <SectionHead title="Account" />
-
-          {/* Tab nav */}
-          <div style={{
-            display: 'flex', gap: 0,
-            border: '1px solid var(--hairline)', overflow: 'hidden',
-            marginBottom: 32, background: 'var(--paper)', width: 'fit-content',
-          }}>
-            {[
-              { id: 'reservations', label: 'My Reservations', icon: 'calendar' },
-              { id: 'feedback',     label: 'Leave Feedback',  icon: 'star'     },
-              { id: 'profile',      label: 'My Profile',      icon: 'user'     },
-            ].map(t => (
-              <button
-                key={t.id}
-                onClick={() => setActiveTab(t.id)}
-                style={{
-                  padding: '12px 24px', border: 'none', cursor: 'pointer',
-                  fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 500,
-                  background: activeTab === t.id ? 'var(--ink)' : 'transparent',
-                  color: activeTab === t.id ? 'var(--paper)' : 'var(--mute)',
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  transition: 'all 0.15s',
-                }}
-              >
-                <Icon name={t.icon} size={12} />
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Reservations tab */}
-          {activeTab === 'reservations' && (
-            <div>
-              {resLoading && (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--mute)', fontSize: 13 }}>
-                  <div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5 }} />
-                  Loading reservations…
-                </div>
-              )}
-              {!resLoading && reservations.length === 0 && (
-                <div style={{ border: '1px solid var(--hairline)', padding: '48px 32px', textAlign: 'center', background: 'var(--paper)' }}>
-                  <Icon name="calendar" size={32} style={{ color: 'var(--mute)', display: 'block', margin: '0 auto 16px' }} />
-                  <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 8 }}>No reservations yet</div>
-                  <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: '0 0 24px' }}>
-                    Make your first reservation and it will appear here.
-                  </p>
-                  <button className="btn btn-primary" onClick={() => navigate('/book')}>
-                    Reserve a suite <Icon name="arrow_right" size={12} />
-                  </button>
-                </div>
-              )}
-              {!resLoading && reservations.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 720 }}>
-                  {reservations.map(r => (
-                    <div key={r._id} style={{
-                      border: '1px solid var(--hairline)', padding: '20px 24px',
-                      background: 'var(--paper)', display: 'grid',
-                      gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'start',
-                    }}>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                          <Icon name="bed" size={14} style={{ color: 'var(--brass)' }} />
-                          <span style={{ fontWeight: 600, fontSize: 15 }}>
-                            {r.room?.number ? `Room ${r.room.number}` : 'Room TBA'}
-                          </span>
-                          {r.room?.type && (
-                            <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>
-                              · {TYPE_LABEL[r.room.type] || r.room.type}
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ display: 'flex', gap: 24, fontSize: 13, color: 'var(--ink-3)', flexWrap: 'wrap' }}>
-                          <span><strong style={{ color: 'var(--ink)' }}>Check-in</strong>&nbsp;{fmtDate(r.checkIn)}</span>
-                          <span><strong style={{ color: 'var(--ink)' }}>Check-out</strong>&nbsp;{fmtDate(r.checkOut)}</span>
-                          {r.totalAmount != null && (
-                            <span>Total:&nbsp;<strong style={{ color: 'var(--ink)' }}>€{Number(r.totalAmount).toLocaleString()}</strong></span>
-                          )}
-                        </div>
-                      </div>
-                      <StatusBadge status={r.status} />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Feedback tab */}
-          {activeTab === 'feedback' && (
-            <div>
-              {feedbackDone ? (
-                <div style={{ border: '1px solid var(--hairline)', padding: '36px 32px', textAlign: 'center', background: 'var(--paper)', maxWidth: 520 }}>
-                  <div style={{ fontSize: 36, marginBottom: 12, color: '#C9A84C' }}>★</div>
-                  <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 8 }}>Thank you!</div>
-                  <p style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 20 }}>Your feedback has been received.</p>
-                  <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setFeedbackDone(false)}>
-                    Leave more feedback
-                  </button>
-                </div>
-              ) : (
-                <FeedbackForm reservations={reservations} onDone={() => setFeedbackDone(true)} />
-              )}
-            </div>
-          )}
-
-          {/* Profile tab */}
-          {activeTab === 'profile' && (
-            <ProfileForm user={user} />
-          )}
-        </div>
 
       </section>
     </PublicShell>

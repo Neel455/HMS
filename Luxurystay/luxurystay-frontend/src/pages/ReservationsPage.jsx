@@ -369,9 +369,10 @@ function NewReservationModal({ onClose, onCreated }) {
 
 // ─── Reservation Detail Panel ─────────────────────────────────────────────────
 
-function ReservationDetail({ reservation: r, onClose, onCancelled }) {
+function ReservationDetail({ reservation: r, onClose, onCancelled, onStatusChanged }) {
   const toast   = useToast();
-  const [cancelling, setCancelling] = useState(false);
+  const [cancelling,   setCancelling]   = useState(false);
+  const [actioning,    setActioning]    = useState(false);
 
   async function cancel() {
     if (!window.confirm(`Cancel reservation ${r.bookingId}?`)) return;
@@ -383,6 +384,28 @@ function ReservationDetail({ reservation: r, onClose, onCancelled }) {
     } catch (err) {
       toast.error(err.response?.data?.message || 'Could not cancel reservation.');
     } finally { setCancelling(false); }
+  }
+
+  async function handleCheckIn() {
+    setActioning(true);
+    try {
+      await api.patch(`/api/reservations/${r.id}/checkin`);
+      toast.success(`${guestName} checked in to room ${r.room?.roomNumber || ''}.`);
+      onStatusChanged();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Check-in failed.');
+    } finally { setActioning(false); }
+  }
+
+  async function handleCheckOut() {
+    setActioning(true);
+    try {
+      await api.patch(`/api/reservations/${r.id}/checkout`);
+      toast.success(`${guestName} checked out successfully.`);
+      onStatusChanged();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Check-out failed.');
+    } finally { setActioning(false); }
   }
 
   const guestName = r.guest
@@ -446,13 +469,37 @@ function ReservationDetail({ reservation: r, onClose, onCancelled }) {
 
         {/* Footer actions */}
         {!['checked-out', 'cancelled'].includes(r.status) && (
-          <div style={{ padding: '20px 32px', borderTop: '1px solid var(--hairline)', display: 'flex', gap: 10 }}>
-            {r.status === 'checked-in' ? (
-              <span style={{ fontSize: 12, color: 'var(--mute)' }}>Guest is in-house. Use Check-in/out to process departure.</span>
-            ) : (
-              <button className="btn btn-danger btn-sm" onClick={cancel} disabled={cancelling}>
-                {cancelling ? <Spinner /> : <Icon name="x" size={12} />}
-                Cancel reservation
+          <div style={{ padding: '20px 32px', borderTop: '1px solid var(--hairline)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* Check-in */}
+            {['pending', 'confirmed'].includes(r.status) && (
+              <button
+                className="btn btn-primary"
+                onClick={handleCheckIn}
+                disabled={actioning}
+                style={{ justifyContent: 'center', opacity: actioning ? 0.7 : 1 }}
+              >
+                {actioning
+                  ? <><div className="spinner" style={{ width: 13, height: 13, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Processing…</>
+                  : <><Icon name="key" size={13} />Issue keys · Check in</>}
+              </button>
+            )}
+            {/* Check-out */}
+            {r.status === 'checked-in' && (
+              <button
+                className="btn btn-primary"
+                onClick={handleCheckOut}
+                disabled={actioning}
+                style={{ justifyContent: 'center', opacity: actioning ? 0.7 : 1 }}
+              >
+                {actioning
+                  ? <><div className="spinner" style={{ width: 13, height: 13, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Processing…</>
+                  : <><Icon name="logout" size={13} />Settle folio · Check out</>}
+              </button>
+            )}
+            {/* Cancel */}
+            {['pending', 'confirmed'].includes(r.status) && (
+              <button className="btn btn-ghost btn-sm" onClick={cancel} disabled={cancelling} style={{ justifyContent: 'center' }}>
+                {cancelling ? <><div className="spinner" style={{ width: 12, height: 12, borderWidth: 1.5 }} />Cancelling…</> : <><Icon name="x" size={12} />Cancel reservation</>}
               </button>
             )}
           </div>
@@ -763,6 +810,11 @@ export default function ReservationsPage() {
     setRefreshKey(k => k + 1);
   }
 
+  function handleStatusChanged() {
+    setSelected(null);
+    setRefreshKey(k => k + 1);
+  }
+
   return (
     <div>
       {/* ── Header ── */}
@@ -798,6 +850,7 @@ export default function ReservationsPage() {
           reservation={selected}
           onClose={() => setSelected(null)}
           onCancelled={handleCancelled}
+          onStatusChanged={handleStatusChanged}
         />
       )}
     </div>

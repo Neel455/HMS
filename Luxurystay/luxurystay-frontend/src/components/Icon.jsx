@@ -36,6 +36,8 @@ const PATHS = {
   trash:     <><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /><path d="M10 11v6M14 11v6" /></>,
   alert:     <><path d="M12 9v4M12 17h.01" /><path d="M10.3 3.7L2 19a1 1 0 0 0 .9 1.3h18.2a1 1 0 0 0 .9-1.3L13.7 3.7a2 2 0 0 0-3.4 0z" /></>,
   refresh:   <path d="M1 4v6h6M23 20v-6h-6M20.5 8.5A9 9 0 0 0 5.6 5.4L1 10M23 14l-4.6 4.6A9 9 0 0 1 3.5 15.5" />,
+  coffee:    <><path d="M17 8h1a4 4 0 0 1 0 8h-1" /><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z" /><line x1="6" y1="2" x2="6" y2="4" /><line x1="10" y1="2" x2="10" y2="4" /><line x1="14" y1="2" x2="14" y2="4" /></>,
+  leaf:      <path d="M17 8C8 10 5.9 16.17 3 22c1.04 0 5.99-1.18 10-4 1.44-1.04 2.49-2.53 3-4 .64-1.87.39-3.75 0-5M20 2C17 3 9 7 10 17" />,
 };
 
 export default function Icon({ name, size = 16, className = '', style = {} }) {

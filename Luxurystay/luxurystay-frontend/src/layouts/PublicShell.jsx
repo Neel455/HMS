@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Icon from '../components/Icon';
@@ -67,6 +68,8 @@ export default function PublicShell({ children, dark = false }) {
   const navigate  = useNavigate();
   const location  = useLocation();
   const { user, isAuthenticated, logout } = useAuth();
+  const [dropOpen, setDropOpen] = useState(false);
+  const dropRef = useRef(null);
 
   const fg     = dark ? 'var(--ivory)' : 'var(--ink)';
   const muted  = dark ? 'var(--mute-2)' : 'var(--mute)';
@@ -79,9 +82,21 @@ export default function PublicShell({ children, dark = false }) {
   }
 
   async function handleSignOut() {
+    setDropOpen(false);
     await logout();
     navigate('/login');
   }
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function onClickOutside(e) {
+      if (dropRef.current && !dropRef.current.contains(e.target)) {
+        setDropOpen(false);
+      }
+    }
+    if (dropOpen) document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [dropOpen]);
 
   return (
     <div style={{ background: bg, minHeight: '100vh', color: fg }}>
@@ -130,23 +145,86 @@ export default function PublicShell({ children, dark = false }) {
         {/* Right — guest auth + CTA */}
         <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', alignItems: 'center' }}>
           {isAuthenticated && user?.role === 'guest' ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div ref={dropRef} style={{ position: 'relative' }}>
+              {/* Avatar trigger */}
               <div
                 className="avatar"
-                style={{ width: 30, height: 30, fontSize: 11, background: 'var(--brass)', color: 'var(--paper)', cursor: 'pointer' }}
-                onClick={() => navigate('/guest')}
+                onClick={() => setDropOpen(v => !v)}
+                style={{
+                  width: 34, height: 34, fontSize: 12,
+                  background: 'var(--brass)', color: 'var(--paper)',
+                  cursor: 'pointer', userSelect: 'none',
+                  outline: dropOpen ? '2px solid var(--brass)' : 'none',
+                  outlineOffset: 2,
+                }}
               >
                 {getInitials(user.name)}
               </div>
-              <div style={{ fontSize: 11, letterSpacing: '0.06em', color: fg }}>
-                {user.name?.split(' ')[0]}
-                <a
-                  onClick={handleSignOut}
-                  style={{ display: 'block', fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: muted, cursor: 'pointer', marginTop: 2 }}
-                >
-                  Sign out
-                </a>
-              </div>
+
+              {/* Dropdown */}
+              {dropOpen && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 10px)', right: 0,
+                  background: 'var(--paper)', border: '1px solid var(--hairline)',
+                  minWidth: 200, zIndex: 100,
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.10)',
+                }}>
+                  {/* User identity header */}
+                  <div style={{
+                    padding: '16px 18px 14px',
+                    borderBottom: '1px solid var(--hairline)',
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>
+                      {user.name || user.email}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--mute)', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: 2 }}>
+                      Étoile member
+                    </div>
+                  </div>
+
+                  {/* Menu items */}
+                  {[
+                    { icon: 'calendar', label: 'My Stay',   action: () => { setDropOpen(false); navigate('/guest'); } },
+                    { icon: 'settings', label: 'Settings',  action: () => { setDropOpen(false); navigate('/guest/settings'); } },
+                  ].map(item => (
+                    <button
+                      key={item.label}
+                      onClick={item.action}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        width: '100%', padding: '12px 18px',
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: 12, letterSpacing: '0.06em', color: 'var(--ink)',
+                        textAlign: 'left',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--linen)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                    >
+                      <Icon name={item.icon} size={13} style={{ color: 'var(--brass-deep)' }} />
+                      {item.label}
+                    </button>
+                  ))}
+
+                  {/* Sign out */}
+                  <div style={{ borderTop: '1px solid var(--hairline)', padding: '6px 0' }}>
+                    <button
+                      onClick={handleSignOut}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        width: '100%', padding: '11px 18px',
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: 12, letterSpacing: '0.06em', color: 'var(--terracotta)',
+                        textAlign: 'left',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--linen)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                    >
+                      <Icon name="logout" size={13} />
+                      Sign out
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <a

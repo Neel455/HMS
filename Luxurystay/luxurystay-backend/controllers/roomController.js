@@ -1,10 +1,38 @@
 const mongoose = require('mongoose');
-const Room = require('../models/Room');
+const Room        = require('../models/Room');
+const Reservation = require('../models/Reservation');
 const { AppError } = require('../middleware/errorHandler');
 const catchAsync = require('../utils/catchAsync');
 const { sendSuccess } = require('../utils/apiResponse');
 const { getPagination, getPaginationMeta } = require('../utils/pagination');
 const { validateObjectId } = require('../utils/objectId');
+
+// Builds a map of roomId → { currentGuest, checkoutDate } from active reservations
+async function buildGuestMap(roomIds) {
+  const actives = await Reservation.find({
+    room:   { $in: roomIds },
+    status: { $in: ['checked-in', 'confirmed', 'pending'] },
+  })
+    .populate('guest', 'firstName lastName')
+    .sort({ checkInDate: 1 })
+    .lean();
+
+  const map = {};
+  actives.forEach(r => {
+    const rid = r.room.toString();
+    if (!map[rid]) {
+      const g = r.guest;
+      map[rid] = {
+        currentGuest:     g ? `${g.firstName} ${g.lastName}` : null,
+        checkoutDate:     r.checkOutDate
+          ? new Date(r.checkOutDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+          : null,
+        reservationStatus: r.status,
+      };
+    }
+  });
+  return map;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -87,11 +115,20 @@ exports.getAllRooms = catchAsync(async (req, res) => {
     Room.countDocuments(filter),
   ]);
 
+  // Enrich with current guest info from active reservations
+  const roomIds = rooms.map(r => r._id);
+  const guestMap = await buildGuestMap(roomIds);
+
+  const enrich = (r) => ({
+    ...buildRoomPayload(r),
+    ...(guestMap[r._id.toString()] || { currentGuest: null, checkoutDate: null, reservationStatus: null }),
+  });
+
   // Build floor-grouped summary for the FE RoomsPage
   const byFloor = rooms.reduce((acc, r) => {
     const f = r.floor;
     if (!acc[f]) acc[f] = [];
-    acc[f].push(buildRoomPayload(r));
+    acc[f].push(enrich(r));
     return acc;
   }, {});
 
@@ -99,7 +136,7 @@ exports.getAllRooms = catchAsync(async (req, res) => {
     res,
     200,
     'Rooms retrieved.',
-    { rooms: rooms.map(buildRoomPayload), byFloor },
+    { rooms: rooms.map(enrich), byFloor },
     getPaginationMeta(totalCount, page, limit)
   );
 });
@@ -189,7 +226,10 @@ exports.getRoomById = catchAsync(async (req, res, next) => {
   const room = await Room.findById(req.params.id);
   if (!room) return next(new AppError('Room not found.', 404));
 
-  sendSuccess(res, 200, 'Room retrieved.', { room: buildRoomPayload(room) });
+  const guestMap = await buildGuestMap([room._id]);
+  const enriched = { ...buildRoomPayload(room), ...(guestMap[room._id.toString()] || {}) };
+
+  sendSuccess(res, 200, 'Room retrieved.', { room: enriched });
 });
 
 /**

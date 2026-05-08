@@ -5,11 +5,12 @@ import LoginPage from './pages/LoginPage';
 import GuestPortalPage from './pages/GuestPortalPage';
 
 // Public pages
-import LandingPage      from './pages/public/LandingPage';
-import SuitesPage       from './pages/public/SuitesPage';
-import ContactPage      from './pages/public/ContactPage';
-import GuestBookPage    from './pages/public/GuestBookPage';
-import ConfirmationPage from './pages/public/ConfirmationPage';
+import LandingPage       from './pages/public/LandingPage';
+import SuitesPage        from './pages/public/SuitesPage';
+import ContactPage       from './pages/public/ContactPage';
+import GuestBookPage     from './pages/public/GuestBookPage';
+import ConfirmationPage  from './pages/public/ConfirmationPage';
+import GuestSettingsPage from './pages/public/GuestSettingsPage';
 
 // Ops
 import DashboardPage    from './pages/DashboardPage';
@@ -53,10 +54,17 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/guest/settings"
+        element={
+          <ProtectedRoute roles={['guest']}>
+            <GuestSettingsPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* ── Staff panel — AppShell wraps all ops routes ───────────────── */}
-      <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
-        <Route index element={<Navigate to="/dashboard" replace />} />
+      <Route element={<ProtectedRoute roles={ALL_STAFF}><AppShell /></ProtectedRoute>}>
 
         {/* Operations */}
         <Route path="/dashboard"    element={<ProtectedRoute roles={DESK}><DashboardPage /></ProtectedRoute>} />

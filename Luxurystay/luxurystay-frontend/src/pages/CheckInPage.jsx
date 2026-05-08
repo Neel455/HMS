@@ -79,8 +79,8 @@ function CheckInList({ list, mode, onSelect, loading }) {
 
   const summary = isArrival
     ? [
-        { l: 'Expected today',  v: list.filter(r => r.status === 'expected').length },
-        { l: 'Checked in',      v: list.filter(r => ['arrived','checked-in'].includes(r.status)).length },
+        { l: 'Expected today',  v: list.filter(r => ['pending','confirmed'].includes(r.status)).length },
+        { l: 'Checked in',      v: list.filter(r => r.status === 'checked-in').length },
         { l: 'VIP arrivals',    v: list.filter(r => r.guest?.isVIP || r.guest?.tier === 'etoile').length },
         { l: 'Avg. stay',       v: list.length ? `${(list.reduce((a, b) => a + (b.nights || 0), 0) / list.length).toFixed(1)} nts` : '—' },
       ]
@@ -119,8 +119,8 @@ function CheckInList({ list, mode, onSelect, loading }) {
               const initials  = getInitials(firstName, lastName);
               const isVIP     = r.guest?.isVIP || r.guest?.tier === 'etoile';
               const canAct    = isArrival
-                ? !['checked-in','checked-out','cancelled'].includes(r.status)
-                : !['checked-out','cancelled'].includes(r.status);
+                ? ['pending','confirmed'].includes(r.status)
+                : r.status === 'checked-in';
 
               return (
                 <tr key={r._id} onClick={() => onSelect(r)} style={{ cursor: 'pointer' }}>
@@ -139,7 +139,7 @@ function CheckInList({ list, mode, onSelect, loading }) {
                     </div>
                   </td>
                   <td>
-                    <span className="mono">{r.confirmationNumber || r._id?.slice(-6).toUpperCase()}</span>
+                    <span className="mono">{r.bookingId || r.id?.slice(-6).toUpperCase()}</span>
                     <div style={{ fontSize: 10, color: 'var(--mute)', marginTop: 2 }}>{r.source || '—'}</div>
                   </td>
                   <td>
@@ -147,7 +147,7 @@ function CheckInList({ list, mode, onSelect, loading }) {
                     <div style={{ fontSize: 10, color: 'var(--mute)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{r.room?.type?.replace('_', ' ') || ''}</div>
                   </td>
                   <td>{r.nights ?? '—'}</td>
-                  <td><span className="mono">{r.eta || r.checkOut?.slice(0, 10) || '—'}</span></td>
+                  <td><span className="mono">{r.eta || r.checkOutDate?.slice(0, 10) || '—'}</span></td>
                   <td><StatusChip status={r.status} /></td>
                   <td className="numeral">{fmtCurrency(r.totalAmount)}</td>
                   <td style={{ textAlign: 'right' }}>
@@ -195,13 +195,13 @@ function CheckInDetail({ reservation, mode, onBack, onDone }) {
   const checklistItems = isArrival ? arrivalItems : departureItems;
 
   const canAct = isArrival
-    ? !['checked-in', 'checked-out', 'cancelled'].includes(r.status)
-    : !['checked-out', 'cancelled'].includes(r.status);
+    ? ['pending', 'confirmed'].includes(r.status)
+    : r.status === 'checked-in';
 
   async function handleAction() {
     setLoading(true);
     try {
-      const endpoint = isArrival ? `/api/reservations/${r._id}/checkin` : `/api/reservations/${r._id}/checkout`;
+      const endpoint = isArrival ? `/api/reservations/${r.id}/checkin` : `/api/reservations/${r.id}/checkout`;
       await api.patch(endpoint, { notes });
       toast.success(isArrival ? `${firstName} checked in to room ${r.room?.roomNumber}.` : `${fullName} checked out successfully.`);
       onDone();
@@ -229,7 +229,7 @@ function CheckInDetail({ reservation, mode, onBack, onDone }) {
             <div style={{ display: 'flex', gap: 10, marginBottom: 28, flexWrap: 'wrap' }}>
               {isVIP && <span className="chip chip-vip"><Icon name="crown" size={10} />Étoile</span>}
               <StatusChip status={r.status} />
-              <span className="chip chip-reserved">{r.confirmationNumber || '—'} · {r.nights ?? '—'} nights</span>
+              <span className="chip chip-reserved">{r.bookingId || '—'} · {r.nights ?? '—'} nights</span>
               {r.room && <span className="chip chip-reserved">Room {r.room.roomNumber} · {r.room.type?.replace('_', ' ')}</span>}
               {r.source && <span className="chip chip-reserved">Source · {r.source}</span>}
             </div>
@@ -255,11 +255,11 @@ function CheckInDetail({ reservation, mode, onBack, onDone }) {
                   </div>
                   <div className="field">
                     <label>Check-in date</label>
-                    <input readOnly value={r.checkIn?.slice(0, 10) || '—'} />
+                    <input readOnly value={r.checkInDate?.slice(0, 10) || '—'} />
                   </div>
                   <div className="field">
                     <label>Check-out date</label>
-                    <input readOnly value={r.checkOut?.slice(0, 10) || '—'} />
+                    <input readOnly value={r.checkOutDate?.slice(0, 10) || '—'} />
                   </div>
                 </div>
 
@@ -333,10 +333,10 @@ function CheckInDetail({ reservation, mode, onBack, onDone }) {
             <div className="eyebrow" style={{ marginBottom: 16 }}>
               {isArrival ? 'Reservation summary' : 'Folio summary'}
             </div>
-            <SummaryRow label="Confirmation" value={r.confirmationNumber || '—'} />
+            <SummaryRow label="Confirmation" value={r.bookingId || '—'} />
             <SummaryRow label="Room" value={r.room ? `${r.room.roomNumber} · ${r.room.type?.replace('_', ' ')}` : '—'} />
-            <SummaryRow label="Check-in"  value={r.checkIn?.slice(0, 10)  || '—'} />
-            <SummaryRow label="Check-out" value={r.checkOut?.slice(0, 10) || '—'} />
+            <SummaryRow label="Check-in"  value={r.checkInDate?.slice(0, 10)  || '—'} />
+            <SummaryRow label="Check-out" value={r.checkOutDate?.slice(0, 10) || '—'} />
             <SummaryRow label="Nights"    value={r.nights ?? '—'} />
             <SummaryRow label="Adults"    value={r.adults ?? '—'} />
             <SummaryRow label="Subtotal"  value={fmtCurrency(subtotal)} />
@@ -371,7 +371,7 @@ export default function CheckInPage() {
   const { data: arrivalsData,   loading: arrivalsLoading }   = useApi('/api/reservations/today-arrivals',   { deps: [refreshKey] });
   const { data: departuresData, loading: departuresLoading } = useApi('/api/reservations/today-departures', { deps: [refreshKey] });
 
-  const arrivals   = [...(arrivalsData?.expected || []), ...(arrivalsData?.checkedIn || [])];
+  const arrivals   = arrivalsData?.arrivals   || [];
   const departures = departuresData?.departures || [];
 
   const list      = tab === 'checkin' ? arrivals : departures;

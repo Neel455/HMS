@@ -1,48 +1,36 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
 
 /**
- * Generic data-fetching hook.
+ * Generic data-fetching hook backed by React Query.
  *
- * @param {string|null} url       - API path. Pass null to skip initial fetch.
+ * Cached for `staleTime` ms — navigating away and back serves cached data
+ * immediately, then silently revalidates in the background.
+ *
+ * @param {string|null} url            - API path. Pass null to skip fetching.
  * @param {object}      [options]
- * @param {any}         [options.defaultData]  - Value before first successful fetch.
- * @param {any[]}       [options.deps]         - Re-fetch when these change (in addition to url).
+ * @param {any}         [options.defaultData] - Value before first successful fetch.
+ * @param {any[]}       [options.deps]        - Extra query key segments (triggers refetch when changed).
+ * @param {number}      [options.staleTime]   - Override global staleTime (ms).
  *
  * Returns { data, loading, error, refetch }
  */
-export function useApi(url, { defaultData = null, deps = [] } = {}) {
-  const [data,    setData]    = useState(defaultData);
-  const [loading, setLoading] = useState(!!url);
-  const [error,   setError]   = useState(null);
-  const abortRef = useRef(null);
+export function useApi(url, { defaultData = null, deps = [], staleTime } = {}) {
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: url ? [url, ...deps] : ['__disabled__'],
+    queryFn: async ({ signal }) => {
+      const res = await api.get(url, { signal });
+      return res.data.data;
+    },
+    enabled: !!url,
+    staleTime,
+    placeholderData: defaultData !== null ? () => defaultData : undefined,
+  });
 
-  const fetch = useCallback(async (fetchUrl) => {
-    if (!fetchUrl) return;
-    if (abortRef.current) abortRef.current.abort();
-    abortRef.current = new AbortController();
-
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await api.get(fetchUrl, { signal: abortRef.current.signal });
-      setData(res.data.data);
-    } catch (err) {
-      if (err.name !== 'CanceledError' && err.name !== 'AbortError') {
-        setError(err.response?.data?.message || err.message || 'An error occurred.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetch(url);
-    return () => abortRef.current?.abort();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, ...deps]);
-
-  const refetch = useCallback(() => fetch(url), [fetch, url]);
-
-  return { data, loading, error, refetch };
+  return {
+    data: data ?? defaultData,
+    loading: isLoading,
+    error: error?.response?.data?.message || error?.message || null,
+    refetch,
+  };
 }

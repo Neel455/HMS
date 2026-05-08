@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import PublicShell from '../../layouts/PublicShell';
 import Icon from '../../components/Icon';
 import api from '../../lib/api';
@@ -530,9 +531,10 @@ function StepConfirm({ dates, suite, details, onBack, onSubmit, loading }) {
 const STEPS = ['Dates', 'Suite', 'Your details', 'Confirm'];
 
 export default function GuestBookPage() {
-  const navigate  = useNavigate();
-  const location  = useLocation();
-  const toast     = useToast();
+  const navigate      = useNavigate();
+  const location      = useLocation();
+  const toast         = useToast();
+  const queryClient   = useQueryClient();
   const { isAuthenticated, user } = useAuth();
 
   const [step, setStep] = useState(0);
@@ -582,6 +584,7 @@ export default function GuestBookPage() {
         nationality:     details.nationality.trim(),
         specialRequests: details.specialRequests.trim(),
       });
+      queryClient.invalidateQueries({ queryKey: ['/api/guest/reservations'] });
       navigate('/confirm', { state: { booking: data.data.booking }, replace: true });
     } catch (err) {
       toast.error(err.response?.data?.message || 'Booking failed. Please try again.');

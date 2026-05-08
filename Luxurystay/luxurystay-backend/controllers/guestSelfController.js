@@ -247,7 +247,13 @@ exports.createBooking = catchAsync(async (req, res, next) => {
     totalAmount,
     depositAmount,
     depositPaid:      false,
-    createdBy:        null,
+    createdBy:        req.user.id,
+  });
+
+  // Mark room as reserved so the rooms board reflects it immediately
+  await Room.findByIdAndUpdate(room._id, {
+    status:           'reserved',
+    lastStatusChange: new Date(),
   });
 
   // Populate room for response

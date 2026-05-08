@@ -81,11 +81,13 @@ function RoomCard({ room, canManage, canChangeStatus, onManage }) {
         {room.currentGuest ? (
           <>
             <div style={{ fontSize: 13, fontWeight: 500 }}>{room.currentGuest}</div>
-            {room.checkoutDate && (
-              <div style={{ fontSize: 11, color: 'var(--mute)', marginTop: 2 }}>
-                Departs {room.checkoutDate}
-              </div>
-            )}
+            <div style={{ fontSize: 11, color: 'var(--mute)', marginTop: 2 }}>
+              {room.status === 'occupied'
+                ? `Departs ${room.checkoutDate}`
+                : room.status === 'reserved'
+                  ? `Arriving · ${room.checkoutDate ? `departs ${room.checkoutDate}` : 'date TBC'}`
+                  : room.checkoutDate}
+            </div>
           </>
         ) : (
           <div style={{ fontSize: 12, color: 'var(--mute)', fontStyle: 'italic' }}>
@@ -111,11 +113,26 @@ function RoomCard({ room, canManage, canChangeStatus, onManage }) {
 
 // ─── Manage Modal ─────────────────────────────────────────────────────────────
 
-function ManageModal({ room, canManage, onClose, onSaved }) {
+// Status options each role may set manually
+function allowedStatuses(role, current) {
+  if (['admin', 'manager', 'receptionist'].includes(role)) return STATUSES;
+  if (role === 'housekeeping') {
+    // Housekeeping can only mark a room clean (available) or flag maintenance
+    return ['cleaning', 'available', 'maintenance'].filter(s => s !== current || current === s);
+  }
+  if (role === 'maintenance') {
+    return ['maintenance', 'available'];
+  }
+  return [current];
+}
+
+function ManageModal({ room, canManage, role, onClose, onSaved }) {
   const toast = useToast();
   const [status, setStatus]   = useState(room.status);
   const [note, setNote]       = useState(room.statusNote || '');
   const [saving, setSaving]   = useState(false);
+
+  const statusOptions = allowedStatuses(role, room.status);
 
   // Edit fields (admin/manager only)
   const [priceStd, setPriceStd]   = useState(room.rates?.standard ?? '');
@@ -158,10 +175,15 @@ function ManageModal({ room, canManage, onClose, onSaved }) {
         <div className="field" style={{ marginBottom: 18 }}>
           <label>Status</label>
           <select value={status} onChange={e => setStatus(e.target.value)}>
-            {STATUSES.map(s => (
+            {statusOptions.map(s => (
               <option key={s} value={s}>{STATUS_CONFIG[s]?.label || s}</option>
             ))}
           </select>
+          {statusOptions.length === 1 && (
+            <p style={{ fontSize: 11, color: 'var(--mute)', marginTop: 4 }}>
+              Contact a manager to change this room's status.
+            </p>
+          )}
         </div>
 
         <div className="field" style={{ marginBottom: 18 }}>
@@ -425,6 +447,7 @@ export default function RoomsPage() {
         <ManageModal
           room={managing}
           canManage={canManage}
+          role={role}
           onClose={() => setManaging(null)}
           onSaved={onSaved}
         />

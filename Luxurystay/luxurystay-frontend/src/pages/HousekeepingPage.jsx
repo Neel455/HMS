@@ -66,7 +66,13 @@ function TaskCard({ task, canManage, canComplete, onUpdate }) {
 
   async function handleComplete() {
     try {
-      await api.patch(`/api/housekeeping/${task._id}/complete`, { completionNote: '' });
+      // Auto-mark room available when completing a departure or prep clean
+      const shouldMarkAvailable = ['departure_clean', 'arrival_prep', 'deep_clean'].includes(task.taskType)
+        || task.room?.status === 'cleaning';
+      await api.patch(`/api/housekeeping/${task._id}/complete`, {
+        completionNote:   '',
+        updateRoomStatus: shouldMarkAvailable,
+      });
       onUpdate();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Could not mark complete.');

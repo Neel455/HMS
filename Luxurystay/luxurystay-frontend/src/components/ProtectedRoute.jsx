@@ -16,8 +16,7 @@ export default function ProtectedRoute({ children, roles }) {
   }
 
   if (roles && user && !roles.includes(user.role)) {
-    // Role not permitted — redirect to their default landing page
-    return <Navigate to="/" replace />;
+    return <Navigate to={user.role === 'guest' ? '/guest' : '/'} replace />;
   }
 
   return children;

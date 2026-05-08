@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PublicShell from '../../layouts/PublicShell';
 import Icon from '../../components/Icon';
 import api from '../../lib/api';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
+import { useApi } from '../../hooks/useApi';
 
 const SUBJECTS = [
   { value: 'reservation', label: 'Reservation enquiry' },
@@ -34,8 +37,134 @@ function ContactBlock({ icon, label, main, sub }) {
 
 const EMPTY = { firstName: '', lastName: '', email: '', subject: 'reservation', message: '' };
 
+// ─── Feedback form (inline, for authenticated guests) ────────────────────────
+
+function FeedbackSection({ reservations }) {
+  const toast    = useToast();
+  const eligible = reservations.filter(r => r.status === 'checked-out');
+
+  const [resId,        setResId]        = useState(eligible[0]?._id || '');
+  const [rating,       setRating]       = useState(0);
+  const [hover,        setHover]        = useState(0);
+  const [comment,      setComment]      = useState('');
+  const [loading,      setLoading]      = useState(false);
+  const [feedbackDone, setFeedbackDone] = useState(false);
+
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!resId)          { toast.error('Please select a reservation.'); return; }
+    if (!rating)         { toast.error('Please select a star rating.'); return; }
+    if (!comment.trim()) { toast.error('Please write a comment.'); return; }
+    setLoading(true);
+    try {
+      await api.post('/api/guest/feedback', { reservationId: resId, rating, comment });
+      toast.success('Thank you for your feedback!');
+      setFeedbackDone(true);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not submit feedback.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (feedbackDone) {
+    return (
+      <div style={{ border: '1px solid var(--hairline)', padding: '36px 32px', textAlign: 'center', background: 'var(--paper)', maxWidth: 520 }}>
+        <div style={{ fontSize: 36, marginBottom: 12, color: '#C9A84C' }}>★</div>
+        <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 8 }}>Thank you!</div>
+        <p style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 20 }}>Your feedback has been received and means a great deal to us.</p>
+        <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => { setFeedbackDone(false); setRating(0); setComment(''); }}>
+          Leave more feedback
+        </button>
+      </div>
+    );
+  }
+
+  if (eligible.length === 0) {
+    return (
+      <div style={{ border: '1px solid var(--hairline)', padding: '48px 32px', textAlign: 'center', background: 'var(--paper)', maxWidth: 520 }}>
+        <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 8 }}>No completed stays yet</div>
+        <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: 0 }}>
+          Feedback can be submitted after your check-out. We look forward to hearing from you.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} style={{ maxWidth: 560 }}>
+      {eligible.length > 1 && (
+        <div className="field" style={{ marginBottom: 16 }}>
+          <label>Which stay?</label>
+          <select value={resId} onChange={e => setResId(e.target.value)}>
+            {eligible.map(r => (
+              <option key={r._id} value={r._id}>
+                {r.room?.number ? `Room ${r.room.number}` : 'Room TBA'} · {fmtDate(r.checkIn)} – {fmtDate(r.checkOut)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, alignItems: 'center' }}>
+        {[1,2,3,4,5].map(n => (
+          <button
+            key={n}
+            type="button"
+            onMouseEnter={() => setHover(n)}
+            onMouseLeave={() => setHover(0)}
+            onClick={() => setRating(n)}
+            style={{
+              fontSize: 32, lineHeight: 1, padding: 0, border: 'none', background: 'none',
+              cursor: 'pointer', color: n <= (hover || rating) ? '#C9A84C' : 'var(--hairline)',
+              transition: 'color 0.1s',
+            }}
+          >★</button>
+        ))}
+        {rating > 0 && (
+          <span style={{ fontSize: 12, color: 'var(--ink-3)', marginLeft: 8 }}>
+            {['','Poor','Fair','Good','Very good','Excellent'][rating]}
+          </span>
+        )}
+      </div>
+      <div className="field" style={{ marginBottom: 16 }}>
+        <label>Your comment</label>
+        <textarea
+          rows={5}
+          value={comment}
+          onChange={e => setComment(e.target.value)}
+          placeholder="Tell us about your stay…"
+          style={{ resize: 'vertical' }}
+        />
+      </div>
+      <button
+        type="submit"
+        className="btn btn-primary"
+        disabled={loading}
+        style={{ opacity: loading ? 0.7 : 1 }}
+      >
+        {loading
+          ? <><div className="spinner" style={{ width: 13, height: 13, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Submitting…</>
+          : <>Submit feedback <Icon name="arrow_right" size={12} /></>}
+      </button>
+    </form>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
 export default function ContactPage() {
-  const toast = useToast();
+  const toast   = useToast();
+  const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
+
+  const isGuest = isAuthenticated && user?.role === 'guest';
+  const { data: resData } = useApi(isGuest ? '/api/guest/reservations' : null);
+  const reservations = resData?.reservations ?? [];
 
   const [form,        setForm]        = useState(EMPTY);
   const [fieldErrors, setFieldErrors] = useState({});
@@ -274,6 +403,25 @@ export default function ContactPage() {
           )}
         </div>
       </section>
+
+      {/* ── Guest feedback section (authenticated guests only) ────────── */}
+      {isGuest && (
+        <section style={{
+          borderTop: '1px solid var(--hairline)',
+          padding: '80px 64px',
+          maxWidth: 1280,
+          margin: '0 auto',
+        }}>
+          <div className="eyebrow" style={{ marginBottom: 20 }}>Share your experience</div>
+          <h2 className="display" style={{ fontSize: 'clamp(36px, 4vw, 56px)', margin: '0 0 16px', lineHeight: 1 }}>
+            Share your <em>experience.</em>
+          </h2>
+          <p style={{ fontSize: 15, color: 'var(--ink-3)', maxWidth: 520, marginBottom: 40, lineHeight: 1.7 }}>
+            We read every review. Your words shape the way we welcome guests.
+          </p>
+          <FeedbackSection reservations={reservations} />
+        </section>
+      )}
     </PublicShell>
   );
 }
