@@ -183,68 +183,72 @@ function AssignTaskModal({ onClose, onSaved, rooms, staff }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" style={{ width: 480 }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+
+        <div className="modal-head">
           <div>
-            <div className="eyebrow" style={{ marginBottom: 4 }}>Housekeeping</div>
-            <h2 className="display" style={{ fontSize: 28, margin: 0 }}>Assign task</h2>
+            <div className="eyebrow" style={{ marginBottom: 3 }}>Housekeeping</div>
+            <h2 className="display" style={{ fontSize: 22, margin: 0, lineHeight: 1.1 }}>Assign task</h2>
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={onClose}><Icon name="close" size={14} /></button>
+          <button onClick={onClose} style={{ background: 'none', border: '1px solid var(--hairline)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)', flexShrink: 0 }}>
+            <Icon name="x" size={14} />
+          </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-          <div className="field">
-            <label>Room *</label>
-            <select value={form.room} onChange={e => set('room', e.target.value)}>
-              <option value="">— Select room —</option>
-              {rooms.map(r => (
-                <option key={r._id} value={r._id}>
-                  {r.roomNumber} · {r.type?.replace('_', ' ')}
-                </option>
-              ))}
-            </select>
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div className="field" style={{ margin: 0 }}>
+              <label>Room *</label>
+              <select value={form.room} onChange={e => set('room', e.target.value)}>
+                <option value="">— Select room —</option>
+                {rooms.map(r => (
+                  <option key={r._id} value={r._id}>
+                    {r.roomNumber} · {r.type?.replace('_', ' ')}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label>Task type</label>
+              <select value={form.taskType} onChange={e => set('taskType', e.target.value)}>
+                {TASK_TYPES.map(t => <option key={t} value={t}>{TASK_TYPE_LABELS[t]}</option>)}
+              </select>
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label>Priority</label>
+              <select value={form.priority} onChange={e => set('priority', e.target.value)}>
+                {['low','medium','high','urgent'].map(p => (
+                  <option key={p} value={p}>{PRIORITY_CONFIG[p].label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label>Assign to</label>
+              <select value={form.assignedTo} onChange={e => set('assignedTo', e.target.value)}>
+                <option value="">— Unassigned —</option>
+                {staff.map(s => (
+                  <option key={s._id} value={s._id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="field" style={{ margin: 0, gridColumn: '1 / -1' }}>
+              <label>Scheduled for</label>
+              <input type="datetime-local" value={form.scheduledFor} onChange={e => set('scheduledFor', e.target.value)} />
+            </div>
           </div>
-          <div className="field">
-            <label>Task type</label>
-            <select value={form.taskType} onChange={e => set('taskType', e.target.value)}>
-              {TASK_TYPES.map(t => <option key={t} value={t}>{TASK_TYPE_LABELS[t]}</option>)}
-            </select>
-          </div>
-          <div className="field">
-            <label>Priority</label>
-            <select value={form.priority} onChange={e => set('priority', e.target.value)}>
-              {['low','medium','high','urgent'].map(p => (
-                <option key={p} value={p}>{PRIORITY_CONFIG[p].label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label>Assign to</label>
-            <select value={form.assignedTo} onChange={e => set('assignedTo', e.target.value)}>
-              <option value="">— Unassigned —</option>
-              {staff.map(s => (
-                <option key={s._id} value={s._id}>{s.name}</option>
-              ))}
-            </select>
-          </div>
-          <div className="field" style={{ gridColumn: '1 / -1' }}>
-            <label>Scheduled for</label>
-            <input type="datetime-local" value={form.scheduledFor} onChange={e => set('scheduledFor', e.target.value)} />
+          <div className="field" style={{ margin: 0 }}>
+            <label>Notes</label>
+            <textarea value={form.notes} onChange={e => set('notes', e.target.value)}
+              style={{ minHeight: 72, resize: 'vertical' }}
+              placeholder="Special instructions…" />
           </div>
         </div>
 
-        <div className="field" style={{ marginBottom: 24 }}>
-          <label>Notes</label>
-          <textarea value={form.notes} onChange={e => set('notes', e.target.value)}
-            style={{ minHeight: 72, resize: 'vertical' }}
-            placeholder="Special instructions…" />
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+        <div className="modal-foot">
+          <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
           <button className="btn btn-primary" onClick={handleCreate} disabled={saving}
             style={{ opacity: saving ? 0.7 : 1 }}>
             {saving
-              ? <><div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Assigning…</>
+              ? <><div className="spinner" style={{ width: 13, height: 13, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Assigning…</>
               : <><Icon name="plus" size={12} />Assign task</>}
           </button>
         </div>

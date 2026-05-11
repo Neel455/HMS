@@ -295,16 +295,20 @@ function NewFeedbackModal({ onClose, onSaved }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" style={{ width: 500 }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+
+        <div className="modal-head">
           <div>
-            <div className="eyebrow" style={{ marginBottom: 4 }}>Guest feedback</div>
-            <h2 className="display" style={{ fontSize: 28, margin: 0 }}>Record feedback</h2>
+            <div className="eyebrow" style={{ marginBottom: 3 }}>Guest feedback</div>
+            <h2 className="display" style={{ fontSize: 22, margin: 0, lineHeight: 1.1 }}>Record feedback</h2>
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={onClose}><Icon name="close" size={14} /></button>
+          <button onClick={onClose} style={{ background: 'none', border: '1px solid var(--hairline)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)', flexShrink: 0 }}>
+            <Icon name="x" size={14} />
+          </button>
         </div>
 
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {/* Reservation search */}
-        <div className="field" style={{ marginBottom: 8 }}>
+        <div className="field" style={{ margin: 0 }}>
           <label>Reservation (guest name or confirmation #)</label>
           <input value={resSearch} onChange={e => { setResSearch(e.target.value); setResId(''); setGuestId(''); }} placeholder="Type to search…" autoFocus />
         </div>
@@ -327,32 +331,35 @@ function NewFeedbackModal({ onClose, onSaved }) {
         )}
 
         {/* Ratings */}
-        <div className="eyebrow" style={{ marginBottom: 12 }}>Ratings</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-          {[['overall','Overall *'],['cleanliness','Cleanliness'],['service','Service'],['comfort','Comfort'],['value','Value']].map(([k, label]) => (
-            <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 12, color: 'var(--mute)', width: 80 }}>{label}</span>
-              <Stars rating={ratings[k]} size={16} interactive onChange={v => setRating(k, v)} />
-            </div>
-          ))}
+        <div>
+          <div className="eyebrow" style={{ marginBottom: 12 }}>Ratings</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {[['overall','Overall *'],['cleanliness','Cleanliness'],['service','Service'],['comfort','Comfort'],['value','Value']].map(([k, label]) => (
+              <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 12, color: 'var(--mute)', width: 80 }}>{label}</span>
+                <Stars rating={ratings[k]} size={16} interactive onChange={v => setRating(k, v)} />
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="field" style={{ marginBottom: 16 }}>
+        <div className="field" style={{ margin: 0 }}>
           <label>Comment</label>
           <textarea value={comment} onChange={e => setComment(e.target.value)} style={{ minHeight: 80, resize: 'vertical' }} placeholder="Guest's own words…" />
         </div>
 
-        <div className="field" style={{ marginBottom: 24 }}>
+        <div className="field" style={{ margin: 0 }}>
           <label>NPS score (0–10, optional)</label>
           <input type="number" min="0" max="10" value={npsScore} onChange={e => setNpsScore(e.target.value)} placeholder="e.g. 9" />
         </div>
+        </div>{/* end modal-body */}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+        <div className="modal-foot">
+          <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
           <button className="btn btn-primary" onClick={handleCreate} disabled={saving}
             style={{ opacity: saving ? 0.7 : 1 }}>
             {saving
-              ? <><div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Saving…</>
+              ? <><div className="spinner" style={{ width: 13, height: 13, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Saving…</>
               : <><Icon name="plus" size={12} />Record feedback</>}
           </button>
         </div>

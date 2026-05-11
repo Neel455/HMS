@@ -17,68 +17,36 @@ const ROLE_LABELS = {
   maintenance:  'Maintenance',
 };
 
-const ROLE_PERMISSIONS = {
-  admin: [
-    { p: 'View reservations',         on: true },
-    { p: 'Create / edit reservations',on: true },
-    { p: 'Check-in / check-out',      on: true },
-    { p: 'View & print folios',       on: true },
-    { p: 'Apply discounts > 10%',     on: true },
-    { p: 'View housekeeping board',   on: true },
-    { p: 'Edit housekeeping tasks',   on: true },
-    { p: 'View analytics',            on: true },
-    { p: 'Manage staff & roles',      on: true },
-    { p: 'System settings',           on: true },
-  ],
-  manager: [
-    { p: 'View reservations',         on: true },
-    { p: 'Create / edit reservations',on: true },
-    { p: 'Check-in / check-out',      on: true },
-    { p: 'View & print folios',       on: true },
-    { p: 'Apply discounts > 10%',     on: true },
-    { p: 'View housekeeping board',   on: true },
-    { p: 'Edit housekeeping tasks',   on: true },
-    { p: 'View analytics',            on: true },
-    { p: 'Manage staff & roles',      on: false },
-    { p: 'System settings',           on: false },
-  ],
-  receptionist: [
-    { p: 'View reservations',         on: true },
-    { p: 'Create / edit reservations',on: true },
-    { p: 'Check-in / check-out',      on: true },
-    { p: 'View & print folios',       on: true },
-    { p: 'Apply discounts > 10%',     on: false },
-    { p: 'View housekeeping board',   on: true },
-    { p: 'Edit housekeeping tasks',   on: false },
-    { p: 'View analytics',            on: false },
-    { p: 'Manage staff & roles',      on: false },
-    { p: 'System settings',           on: false },
-  ],
-  housekeeping: [
-    { p: 'View reservations',         on: false },
-    { p: 'Create / edit reservations',on: false },
-    { p: 'Check-in / check-out',      on: false },
-    { p: 'View & print folios',       on: false },
-    { p: 'Apply discounts > 10%',     on: false },
-    { p: 'View housekeeping board',   on: true },
-    { p: 'Edit housekeeping tasks',   on: true },
-    { p: 'View analytics',            on: false },
-    { p: 'Manage staff & roles',      on: false },
-    { p: 'System settings',           on: false },
-  ],
-  maintenance: [
-    { p: 'View reservations',         on: false },
-    { p: 'Create / edit reservations',on: false },
-    { p: 'Check-in / check-out',      on: false },
-    { p: 'View & print folios',       on: false },
-    { p: 'Apply discounts > 10%',     on: false },
-    { p: 'View housekeeping board',   on: false },
-    { p: 'Edit housekeeping tasks',   on: false },
-    { p: 'View analytics',            on: false },
-    { p: 'Manage staff & roles',      on: false },
-    { p: 'System settings',           on: false },
-  ],
-};
+const SIDEBAR_PAGE_ACCESS = [
+  {
+    section: 'Operations',
+    pages: [
+      { label: 'Dashboard',           roles: ['admin', 'manager', 'receptionist'] },
+      { label: 'Reservations',        roles: ['admin', 'manager', 'receptionist'] },
+      { label: 'Check-in / out',      roles: ['admin', 'manager', 'receptionist'] },
+      { label: 'Rooms',               roles: ['admin', 'manager', 'receptionist', 'housekeeping'] },
+      { label: 'Housekeeping',        roles: ['admin', 'manager', 'housekeeping'] },
+      { label: 'Maintenance',         roles: ['admin', 'manager', 'housekeeping', 'maintenance'] },
+    ],
+  },
+  {
+    section: 'Commerce',
+    pages: [
+      { label: 'Billing',             roles: ['admin', 'manager', 'receptionist'] },
+      { label: 'Guests',              roles: ['admin', 'manager', 'receptionist'] },
+      { label: 'Feedback',            roles: ['admin', 'manager'] },
+    ],
+  },
+  {
+    section: 'Administration',
+    pages: [
+      { label: 'Analytics',           roles: ['admin', 'manager'] },
+      { label: 'Suites',              roles: ['admin'] },
+      { label: 'Staff & Roles',       roles: ['admin'] },
+      { label: 'Settings',            roles: ['admin'] },
+    ],
+  },
+];
 
 const DEPT_LABELS = {
   admin:        'Administration',
@@ -150,45 +118,50 @@ function StaffModal({ staff, onClose, onSaved }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" style={{ width: 480 }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+
+        <div className="modal-head">
           <div>
-            <div className="eyebrow" style={{ marginBottom: 4 }}>Staff & roles</div>
-            <h2 className="display" style={{ fontSize: 28, margin: 0 }}>{isEdit ? 'Edit staff' : 'Add staff'}</h2>
+            <div className="eyebrow" style={{ marginBottom: 3 }}>Staff &amp; roles</div>
+            <h2 className="display" style={{ fontSize: 22, margin: 0, lineHeight: 1.1 }}>{isEdit ? 'Edit staff' : 'Add staff'}</h2>
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={onClose}><Icon name="close" size={14} /></button>
+          <button onClick={onClose} style={{ background: 'none', border: '1px solid var(--hairline)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)', flexShrink: 0 }}>
+            <Icon name="x" size={14} />
+          </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-          <div className="field" style={{ gridColumn: '1/-1' }}>
-            <label>Full name *</label>
-            <input value={form.name} onChange={e => set('name', e.target.value)} autoFocus />
-          </div>
-          <div className="field">
-            <label>Email *</label>
-            <input type="email" value={form.email} onChange={e => set('email', e.target.value)} />
-          </div>
-          <div className="field">
-            <label>Phone</label>
-            <input value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="+33 6 …" />
-          </div>
-          <div className="field">
-            <label>Role</label>
-            <select value={form.role} onChange={e => set('role', e.target.value)}>
-              {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-            </select>
-          </div>
-          <div className="field">
-            <label>{isEdit ? 'New password (leave blank to keep)' : 'Password *'}</label>
-            <input type="password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="••••••••" />
+        <div className="modal-body">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div className="field" style={{ margin: 0, gridColumn: '1/-1' }}>
+              <label>Full name *</label>
+              <input value={form.name} onChange={e => set('name', e.target.value)} autoFocus />
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label>Email *</label>
+              <input type="email" value={form.email} onChange={e => set('email', e.target.value)} />
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label>Phone</label>
+              <input value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="+33 6 …" />
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label>Role</label>
+              <select value={form.role} onChange={e => set('role', e.target.value)}>
+                {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+              </select>
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label>{isEdit ? 'New password (leave blank to keep)' : 'Password *'}</label>
+              <input type="password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="••••••••" />
+            </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+        <div className="modal-foot">
+          <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}
             style={{ opacity: saving ? 0.7 : 1 }}>
             {saving
-              ? <><div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />{isEdit ? 'Saving…' : 'Adding…'}</>
+              ? <><div className="spinner" style={{ width: 13, height: 13, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />{isEdit ? 'Saving…' : 'Adding…'}</>
               : <>{isEdit ? 'Save changes' : <><Icon name="plus" size={12} />Add staff</>}</>}
           </button>
         </div>
@@ -231,7 +204,13 @@ export default function StaffPage() {
     }
   }
 
-  const perms = ROLE_PERMISSIONS[activePerms] || [];
+  const pageAccess = SIDEBAR_PAGE_ACCESS.map(section => ({
+    ...section,
+    pages: section.pages.map(page => ({
+      ...page,
+      allowed: page.roles.includes(activePerms),
+    })),
+  }));
 
   return (
     <div>
@@ -378,10 +357,17 @@ export default function StaffPage() {
                   {activePerms === 'housekeeping' && 'Access to the housekeeping board and task management only.'}
                   {activePerms === 'maintenance'  && 'Access to maintenance requests only. Can submit and update their own requests.'}
                 </p>
-                {perms.map((p, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < perms.length - 1 ? '1px solid var(--hairline-2)' : 'none' }}>
-                    <span style={{ fontSize: 12 }}>{p.p}</span>
-                    <Toggle on={p.on} />
+                {pageAccess.map(section => (
+                  <div key={section.section} style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--mute)', marginBottom: 10 }}>
+                      {section.section}
+                    </div>
+                    {section.pages.map((page, index) => (
+                      <div key={page.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: index < section.pages.length - 1 ? '1px solid var(--hairline-2)' : 'none' }}>
+                        <span style={{ fontSize: 12 }}>{page.label}</span>
+                        <Toggle on={page.allowed} />
+                      </div>
+                    ))}
                   </div>
                 ))}
               </div>

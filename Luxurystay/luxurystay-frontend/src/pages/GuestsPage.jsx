@@ -241,47 +241,51 @@ function NewGuestModal({ onClose, onSaved }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" style={{ width: 520 }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+
+        <div className="modal-head">
           <div>
-            <div className="eyebrow" style={{ marginBottom: 4 }}>Guest registry</div>
-            <h2 className="display" style={{ fontSize: 28, margin: 0 }}>New guest</h2>
+            <div className="eyebrow" style={{ marginBottom: 3 }}>Guest registry</div>
+            <h2 className="display" style={{ fontSize: 22, margin: 0, lineHeight: 1.1 }}>New guest</h2>
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={onClose}><Icon name="close" size={14} /></button>
+          <button onClick={onClose} style={{ background: 'none', border: '1px solid var(--hairline)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)', flexShrink: 0 }}>
+            <Icon name="x" size={14} />
+          </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-          <div className="field"><label>First name *</label><input value={form.firstName} onChange={e => set('firstName', e.target.value)} autoFocus /></div>
-          <div className="field"><label>Last name *</label><input value={form.lastName} onChange={e => set('lastName', e.target.value)} /></div>
-          <div className="field"><label>Email *</label><input type="email" value={form.email} onChange={e => set('email', e.target.value)} /></div>
-          <div className="field"><label>Phone</label><input value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="+33 6 …" /></div>
-          <div className="field">
-            <label>Nationality</label>
-            <select value={form.nationality} onChange={e => set('nationality', e.target.value)}>
-              <option value="">— Select —</option>
-              {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div className="field" style={{ margin: 0 }}><label>First name *</label><input value={form.firstName} onChange={e => set('firstName', e.target.value)} autoFocus /></div>
+            <div className="field" style={{ margin: 0 }}><label>Last name *</label><input value={form.lastName} onChange={e => set('lastName', e.target.value)} /></div>
+            <div className="field" style={{ margin: 0 }}><label>Email *</label><input type="email" value={form.email} onChange={e => set('email', e.target.value)} /></div>
+            <div className="field" style={{ margin: 0 }}><label>Phone</label><input value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="+33 6 …" /></div>
+            <div className="field" style={{ margin: 0 }}>
+              <label>Nationality</label>
+              <select value={form.nationality} onChange={e => set('nationality', e.target.value)}>
+                <option value="">— Select —</option>
+                {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label>Loyalty tier</label>
+              <select value={form.tier} onChange={e => set('tier', e.target.value)}>
+                {TIERS.map(t => <option key={t} value={t}>{TIER_CONFIG[t]?.label || t}</option>)}
+              </select>
+            </div>
           </div>
-          <div className="field">
-            <label>Loyalty tier</label>
-            <select value={form.tier} onChange={e => set('tier', e.target.value)}>
-              {TIERS.map(t => <option key={t} value={t}>{TIER_CONFIG[t]?.label || t}</option>)}
-            </select>
+          <div className="field" style={{ margin: 0 }}>
+            <label>Concierge notes</label>
+            <textarea value={form.notes} onChange={e => set('notes', e.target.value)}
+              style={{ minHeight: 72, resize: 'vertical' }}
+              placeholder="Standing preferences, dietary requirements (one per line)…" />
           </div>
         </div>
 
-        <div className="field" style={{ marginBottom: 24 }}>
-          <label>Concierge notes</label>
-          <textarea value={form.notes} onChange={e => set('notes', e.target.value)}
-            style={{ minHeight: 72, resize: 'vertical' }}
-            placeholder="Standing preferences, dietary requirements (one per line)…" />
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+        <div className="modal-foot">
+          <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
           <button className="btn btn-primary" onClick={handleCreate} disabled={saving}
             style={{ opacity: saving ? 0.7 : 1 }}>
             {saving
-              ? <><div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Creating…</>
+              ? <><div className="spinner" style={{ width: 13, height: 13, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Creating…</>
               : <><Icon name="plus" size={12} />Add guest</>}
           </button>
         </div>

@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>LuxuryStay HMS — Hotel Management System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script src="data.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" src="icons.jsx"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="shell.jsx"></script>
+  <script type="text/babel" src="pages-ops.jsx"></script>
+  <script type="text/babel" src="pages-services.jsx"></script>
+  <script type="text/babel" src="pages-admin.jsx"></script>
+  <script type="text/babel" src="pages-public.jsx"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+      "accent": "brass",
+      "density": "balanced",
+      "showLandingFirst": false
+    }/*EDITMODE-END*/;
+
+    const ACCENTS = {
+      brass: { brass: "#A08054", brassDeep: "#806339", brassSoft: "#C9AE82", label: "Brass · Maison" },
+      noir: { brass: "#4A443B", brassDeep: "#1A1814", brassSoft: "#8B847A", label: "Charcoal" },
+      vermeil: { brass: "#B5573B", brassDeep: "#8A3F26", brassSoft: "#E8C9BC", label: "Vermeil" },
+      sage: { brass: "#6E7F5C", brassDeep: "#4F5C40", brassSoft: "#C8D2B8", label: "Sage" },
+    };
+
+    function App() {
+      const [page, setPage] = useState("landing");
+      const [role, setRole] = useState("admin");
+      const [guest, setGuest] = useState(null); // { name, initials, email, member } | null
+      const [tweaks, setTweak] = window.useTweaks(TWEAK_DEFAULTS);
+
+      // Apply accent tweak
+      useEffect(() => {
+        const a = ACCENTS[tweaks.accent] || ACCENTS.brass;
+        document.documentElement.style.setProperty("--brass", a.brass);
+        document.documentElement.style.setProperty("--brass-deep", a.brassDeep);
+        document.documentElement.style.setProperty("--brass-soft", a.brassSoft);
+      }, [tweaks.accent]);
+
+      // Public-facing pages render full-bleed without app shell
+      const PUBLIC_PAGES = ["landing", "suites", "contact", "book", "confirm", "stay", "signin"];
+
+      // Guard: My Stay requires a signed-in guest
+      useEffect(() => {
+        if (page === "stay" && !guest) setPage("signin");
+      }, [page, guest]);
+
+      const renderPage = () => {
+        switch (page) {
+          case "signin": return <SignInPage setRole={setRole} setPage={setPage} setGuest={setGuest} />;
+          case "landing": return <LandingPage setPage={setPage} guest={guest} setGuest={setGuest} />;
+          case "suites": return <SuitesPage setPage={setPage} guest={guest} setGuest={setGuest} />;
+          case "contact": return <ContactPage setPage={setPage} guest={guest} setGuest={setGuest} />;
+          case "book": return <GuestBookPage setPage={setPage} guest={guest} setGuest={setGuest} />;
+          case "confirm": return <ConfirmationPage setPage={setPage} guest={guest} setGuest={setGuest} />;
+          case "stay": return <PortalPage setPage={setPage} guest={guest} setGuest={setGuest} />;
+          case "dashboard": return <DashboardPage role={role} />;
+          case "reservations": return <ReservationsPage />;
+          case "checkin": return <CheckinPage />;
+          case "rooms": return <RoomsPage />;
+          case "housekeeping": return <HousekeepingPage />;
+          case "maintenance": return <MaintenancePage />;
+          case "billing": return <BillingPage />;
+          case "guests": return <GuestsPage />;
+          case "feedback": return <FeedbackPage />;
+          case "analytics": return <AnalyticsPage />;
+          case "staff": return <StaffPage />;
+          case "settings": return <SettingsPage />;
+          default: return <DashboardPage role={role} />;
+        }
+      };
+
+      // Auto-redirect housekeeping role away from forbidden pages
+      useEffect(() => {
+        const allowed = NAV.flatMap(s => s.items).filter(i => i.roles.includes(role)).map(i => i.id);
+        if (!PUBLIC_PAGES.includes(page) && !allowed.includes(page)) {
+          setPage(allowed[0] || "dashboard");
+        }
+      }, [role]);
+
+      const isPublic = PUBLIC_PAGES.includes(page);
+
+      return (
+        <>
+          {isPublic ? renderPage() : (
+            <div className="app" data-screen-label={page}>
+              <Sidebar role={role} page={page} setPage={setPage} />
+              <div className="main">
+                <Topbar page={page} role={role} setRole={setRole} />
+                <div className="content">{renderPage()}</div>
+              </div>
+            </div>
+          )}
+
+          <window.TweaksPanel title="Tweaks">
+            <window.TweakSection title="Public navigation">
+              <window.TweakButton label="The House (landing)" onClick={() => setPage("landing")} />
+              <window.TweakButton label="Suites" onClick={() => setPage("suites")} />
+              <window.TweakButton label="Reserve · booking" onClick={() => setPage("book")} />
+              <window.TweakButton label="Confirmation" onClick={() => setPage("confirm")} />
+              <window.TweakButton label="My Stay (in-stay portal)" onClick={() => setPage("stay")} />
+              <window.TweakButton label="Contact" onClick={() => setPage("contact")} />
+              <window.TweakButton label="Sign in (unified)" onClick={() => setPage("signin")} />
+              <window.TweakButton label={guest ? `Sign out (${guest.initials})` : "— no guest signed in —"} onClick={() => setGuest(null)} />
+            </window.TweakSection>
+            <window.TweakSection title="Workspace · jump to">
+              <window.TweakButton label="Dashboard" onClick={() => setPage("dashboard")} />
+              <window.TweakButton label="Reservations" onClick={() => setPage("reservations")} />
+              <window.TweakButton label="Check-in / out" onClick={() => setPage("checkin")} />
+              <window.TweakButton label="Rooms" onClick={() => setPage("rooms")} />
+              <window.TweakButton label="Housekeeping" onClick={() => setPage("housekeeping")} />
+              <window.TweakButton label="Maintenance" onClick={() => setPage("maintenance")} />
+              <window.TweakButton label="Billing" onClick={() => setPage("billing")} />
+              <window.TweakButton label="Guests" onClick={() => setPage("guests")} />
+              <window.TweakButton label="Feedback" onClick={() => setPage("feedback")} />
+              <window.TweakButton label="Analytics" onClick={() => setPage("analytics")} />
+              <window.TweakButton label="Staff & roles" onClick={() => setPage("staff")} />
+              <window.TweakButton label="Settings" onClick={() => setPage("settings")} />
+            </window.TweakSection>
+            <window.TweakSection title="Active role">
+              <window.TweakRadio
+                value={role}
+                onChange={v => setRole(v)}
+                options={[
+                  { value: "admin", label: "Admin" },
+                  { value: "manager", label: "Manager" },
+                  { value: "receptionist", label: "Reception" },
+                  { value: "housekeeping", label: "Housekeep" },
+                ]} />
+            </window.TweakSection>
+            <window.TweakSection title="Accent palette">
+              <window.TweakSelect
+                value={tweaks.accent}
+                onChange={v => setTweak("accent", v)}
+                options={Object.entries(ACCENTS).map(([k, v]) => ({ value: k, label: v.label }))} />
+            </window.TweakSection>
+          </window.TweaksPanel>
+        </>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

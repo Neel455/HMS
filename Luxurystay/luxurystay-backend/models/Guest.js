@@ -56,7 +56,6 @@ const guestSchema = new mongoose.Schema(
     },
     preferences: {
       roomType:    { type: String, trim: true },
-      bedType:     { type: String, trim: true },
       floorLevel:  { type: String, trim: true },
       smoking:     { type: Boolean, default: false },
       extraPillow: { type: Boolean, default: false },

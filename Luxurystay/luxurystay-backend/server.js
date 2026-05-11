@@ -86,7 +86,8 @@ app.use('/api/guests', require('./routes/guests'));
 app.use('/api/property', require('./routes/property'));
 
 // Module 4 — Rooms
-app.use('/api/rooms', require('./routes/rooms'));
+app.use('/api/rooms',  require('./routes/rooms'));
+app.use('/api/suites', require('./routes/suites'));
 
 // Module 5 — Reservations
 app.use('/api/reservations', require('./routes/reservations'));

@@ -3,54 +3,28 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import PublicShell from '../../layouts/PublicShell';
 import Icon from '../../components/Icon';
+import Dropdown from '../../components/Dropdown';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 
-// ─── Suite catalogue (static display data) ───────────────────────────────────
+// Fallback gradients — used when a suite has no image and no gradient stored
+const FALLBACK_GRAD = {
+  deluxe_twin:   'linear-gradient(140deg, #EFE8DB, #C9AE82)',
+  deluxe_king:   'linear-gradient(140deg, #C9AE82, #A08054)',
+  junior_suite:  'linear-gradient(140deg, #A08054, #806339)',
+  premier_suite: 'linear-gradient(140deg, #806339, #4A443B)',
+  penthouse:     'linear-gradient(140deg, #4A443B, #1A1814)',
+};
 
-const SUITE_CATALOGUE = [
-  {
-    typeLabel: 'Deluxe Twin',
-    sqm: 28,
-    grad: 'linear-gradient(140deg, #EFE8DB, #C9AE82)',
-    num: '01',
-    desc: 'Twin beds, garden aspect, marble bathroom.',
-    amenities: ['Fibre Wi-Fi', 'Espresso', 'Bath ritual'],
-  },
-  {
-    typeLabel: 'Deluxe King',
-    sqm: 32,
-    grad: 'linear-gradient(140deg, #C9AE82, #A08054)',
-    num: '02',
-    desc: 'King bed, French balcony, garden or sea views.',
-    amenities: ['Fibre Wi-Fi', 'Espresso', 'Bath ritual'],
-  },
-  {
-    typeLabel: 'Junior Suite',
-    sqm: 48,
-    grad: 'linear-gradient(140deg, #A08054, #806339)',
-    num: '03',
-    desc: 'Separate sitting area, soaking tub, sea view terrace.',
-    amenities: ['Fibre Wi-Fi', 'Espresso', 'Bath ritual', 'Terrace'],
-  },
-  {
-    typeLabel: 'Premier Suite',
-    sqm: 76,
-    grad: 'linear-gradient(140deg, #806339, #4A443B)',
-    num: '04',
-    desc: 'Private terrace, dressing room, dedicated butler.',
-    amenities: ['Fibre Wi-Fi', 'Espresso', 'Bath ritual', 'Terrace', 'Butler'],
-  },
-  {
-    typeLabel: 'Penthouse',
-    sqm: 180,
-    grad: 'linear-gradient(140deg, #4A443B, #1A1814)',
-    num: '05',
-    desc: 'Wraparound terrace, plunge pool, panoramic sea views.',
-    amenities: ['Fibre Wi-Fi', 'Espresso', 'Butler', 'Plunge pool'],
-  },
-];
+// Maps suite display-name → slug so StepConfirm can look up the gradient
+const SUITE_NAME_TO_SLUG = {
+  'Deluxe Twin':   'deluxe_twin',
+  'Deluxe King':   'deluxe_king',
+  'Junior Suite':  'junior_suite',
+  'Premier Suite': 'premier_suite',
+  'Penthouse':     'penthouse',
+};
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
 
@@ -141,15 +115,21 @@ function StepDates({ data, onChange, onNext }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 32 }}>
         <div className="field">
           <label>Adults</label>
-          <select value={data.adults} onChange={e => onChange('adults', Number(e.target.value))}>
-            {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n} adult{n > 1 ? 's' : ''}</option>)}
-          </select>
+          <Dropdown
+            value={data.adults}
+            onChange={value => onChange('adults', Number(value))}
+            options={[1,2,3,4,5,6].map(n => ({ value: n, label: `${n} adult${n > 1 ? 's' : ''}` }))}
+            placeholder="Select adults"
+          />
         </div>
         <div className="field">
           <label>Children</label>
-          <select value={data.children} onChange={e => onChange('children', Number(e.target.value))}>
-            {[0,1,2,3,4].map(n => <option key={n} value={n}>{n === 0 ? 'No children' : `${n} child${n > 1 ? 'ren' : ''}`}</option>)}
-          </select>
+          <Dropdown
+            value={data.children}
+            onChange={value => onChange('children', Number(value))}
+            options={[0,1,2,3,4].map(n => ({ value: n, label: n === 0 ? 'No children' : `${n} child${n > 1 ? 'ren' : ''}` }))}
+            placeholder="Select children"
+          />
         </div>
       </div>
 
@@ -182,6 +162,7 @@ function StepDates({ data, onChange, onNext }) {
 // ─── Step 2 — Suite ───────────────────────────────────────────────────────────
 
 function StepSuite({ dates, selectedType, onSelect, onNext, onBack }) {
+  const [allSuites, setAllSuites] = useState([]);
   const [available, setAvailable] = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState('');
@@ -193,23 +174,34 @@ function StepSuite({ dates, selectedType, onSelect, onNext, onBack }) {
   useEffect(() => {
     setLoading(true);
     setError('');
-    api.get('/api/guest/rooms', {
-      params: {
-        checkIn:  dates.checkIn,
-        checkOut: dates.checkOut,
-        adults:   dates.adults,
-      },
-    })
-      .then(res => setAvailable(res.data.data?.types || []))
+    Promise.all([
+      api.get('/api/suites'),
+      api.get('/api/guest/rooms', {
+        params: { checkIn: dates.checkIn, checkOut: dates.checkOut, adults: dates.adults },
+      }),
+    ])
+      .then(([suitesRes, availRes]) => {
+        setAllSuites(suitesRes.data?.data?.suites ?? []);
+        setAvailable(availRes.data?.data?.types   ?? []);
+      })
       .catch(() => setError('Could not check availability. Please try again.'))
       .finally(() => setLoading(false));
   }, [dates.checkIn, dates.checkOut, dates.adults]);
 
-  // Merge API availability with static catalogue data
-  const availableLabels = new Set(available.map(a => a.typeLabel));
-  const suites = SUITE_CATALOGUE.map(s => {
-    const avail = available.find(a => a.typeLabel === s.typeLabel);
-    return { ...s, available: !!avail, rate: avail?.rate || null, total: avail?.total || null, count: avail?.count || 0 };
+  // Merge suite marketing data with live availability (matched by slug ↔ type)
+  const suites = allSuites.map((suite, i) => {
+    const avail = available.find(a => a.type === suite.slug);
+    const grad  = suite.gradient || FALLBACK_GRAD[suite.slug] || 'linear-gradient(140deg, #C9AE82, #A08054)';
+    const num   = String(i + 1).padStart(2, '0');
+    return {
+      ...suite,
+      grad,
+      num,
+      available: !!avail,
+      rate:  avail?.rate  || null,
+      total: avail?.total || null,
+      count: avail?.count || 0,
+    };
   });
 
   return (
@@ -232,8 +224,7 @@ function StepSuite({ dates, selectedType, onSelect, onNext, onBack }) {
         <div style={{
           background: 'var(--terracotta-soft)', border: '1px solid var(--terracotta)',
           padding: '12px 16px', borderRadius: 'var(--radius)', fontSize: 13,
-          color: 'var(--terracotta)', marginBottom: 24,
-          display: 'flex', gap: 8, alignItems: 'center',
+          color: 'var(--terracotta)', marginBottom: 24, display: 'flex', gap: 8, alignItems: 'center',
         }}>
           <Icon name="alert" size={13} /> {error}
         </div>
@@ -242,11 +233,12 @@ function StepSuite({ dates, selectedType, onSelect, onNext, onBack }) {
       {!loading && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 28 }}>
           {suites.map(s => {
-            const selected = selectedType === s.typeLabel;
+            const selected  = selectedType === s.name;
+            const hasImage  = s.images?.length > 0;
             return (
               <div
-                key={s.typeLabel}
-                onClick={() => s.available && onSelect(s.typeLabel)}
+                key={s.id}
+                onClick={() => s.available && onSelect(s.name)}
                 style={{
                   display: 'grid', gridTemplateColumns: '120px 1fr auto',
                   gap: 20, padding: 0, overflow: 'hidden',
@@ -257,27 +249,35 @@ function StepSuite({ dates, selectedType, onSelect, onNext, onBack }) {
                   transition: 'border-color 0.15s',
                 }}
               >
-                {/* Gradient thumbnail */}
-                <div style={{ background: s.grad, position: 'relative', minHeight: 110 }}>
-                  <div style={{
-                    position: 'absolute', bottom: 8, left: 10,
-                    fontFamily: 'var(--serif)', fontSize: 28, fontStyle: 'italic',
-                    color: 'rgba(247, 243, 236, 0.25)',
-                  }}>{s.num}</div>
+                {/* Thumbnail — image or gradient */}
+                <div style={{ position: 'relative', minHeight: 110, overflow: 'hidden' }}>
+                  {hasImage ? (
+                    <img src={s.images[0]} alt={s.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', background: s.grad, position: 'absolute', inset: 0 }}>
+                      <div style={{ position: 'absolute', bottom: 8, left: 10, fontFamily: 'var(--serif)', fontSize: 28, fontStyle: 'italic', color: 'rgba(247,243,236,0.25)' }}>
+                        {s.num}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Details */}
                 <div style={{ padding: '18px 0' }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
-                    <h3 className="display" style={{ fontSize: 22, margin: 0 }}>{s.typeLabel}</h3>
-                    <span style={{ fontSize: 12, color: 'var(--mute)' }}>{s.sqm} m²</span>
+                    <h3 className="display" style={{ fontSize: 22, margin: 0 }}>{s.name}</h3>
+                    {s.sqm && <span style={{ fontSize: 12, color: 'var(--mute)' }}>{s.sqm} m²</span>}
                   </div>
-                  <p style={{ fontSize: 12, color: 'var(--ink-3)', margin: '0 0 10px' }}>{s.desc}</p>
-                  <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                    {s.amenities.map(a => (
-                      <span key={a} className="chip chip-reserved" style={{ fontSize: 10 }}>{a}</span>
-                    ))}
-                  </div>
+                  {s.description && (
+                    <p style={{ fontSize: 12, color: 'var(--ink-3)', margin: '0 0 10px' }}>{s.description}</p>
+                  )}
+                  {s.amenities?.length > 0 && (
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      {s.amenities.map((a, j) => (
+                        <span key={j} className="chip chip-reserved" style={{ fontSize: 10 }}>{a.label}</span>
+                      ))}
+                    </div>
+                  )}
                   {!s.available && (
                     <span style={{ fontSize: 11, color: 'var(--terracotta)', marginTop: 6, display: 'block' }}>
                       Not available for selected dates
@@ -305,7 +305,7 @@ function StepSuite({ dates, selectedType, onSelect, onNext, onBack }) {
                       </div>
                       <button
                         className={selected ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'}
-                        onClick={e => { e.stopPropagation(); onSelect(s.typeLabel); }}
+                        onClick={e => { e.stopPropagation(); onSelect(s.name); }}
                       >
                         {selected ? <><Icon name="check" size={12} /> Selected</> : 'Select'}
                       </button>
@@ -451,7 +451,7 @@ function StepConfirm({ dates, suite, details, onBack, onSubmit, loading }) {
   const nights = Math.ceil(
     (new Date(dates.checkOut) - new Date(dates.checkIn)) / 86400000
   );
-  const suiteData = SUITE_CATALOGUE.find(s => s.typeLabel === suite);
+  const suiteGrad = FALLBACK_GRAD[SUITE_NAME_TO_SLUG[suite]] || 'linear-gradient(140deg, #C9AE82, #A08054)';
 
   function fmtDate(iso) {
     return new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
@@ -469,7 +469,7 @@ function StepConfirm({ dates, suite, details, onBack, onSubmit, loading }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
         {/* Suite card */}
         <div style={{
-          background: suiteData?.grad || 'var(--linen)',
+          background: suiteGrad,
           position: 'relative', aspectRatio: '16/9', overflow: 'hidden',
         }}>
           <div style={{

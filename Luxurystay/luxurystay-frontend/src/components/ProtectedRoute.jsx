@@ -15,8 +15,15 @@ export default function ProtectedRoute({ children, roles }) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  function getDefaultRoute(role) {
+    if (role === 'guest') return '/guest';
+    if (role === 'housekeeping') return '/housekeeping';
+    if (role === 'maintenance') return '/maintenance';
+    return '/dashboard';
+  }
+
   if (roles && user && !roles.includes(user.role)) {
-    return <Navigate to={user.role === 'guest' ? '/guest' : '/'} replace />;
+    return <Navigate to={getDefaultRoute(user.role)} replace />;
   }
 
   return children;

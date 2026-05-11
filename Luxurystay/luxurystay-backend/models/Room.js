@@ -3,7 +3,6 @@ const mongoose = require('mongoose');
 const ROOM_TYPES = ['deluxe_twin', 'deluxe_king', 'junior_suite', 'premier_suite', 'penthouse'];
 const ROOM_STATUSES = ['available', 'occupied', 'cleaning', 'maintenance', 'reserved'];
 const VIEW_TYPES = ['sea_view', 'garden_view', 'city_view', 'courtyard_view', 'pool_view'];
-const BED_TYPES = ['twin', 'king', 'queen', 'double', 'king_sofa', 'twin_sofa'];
 
 const roomSchema = new mongoose.Schema(
   {
@@ -26,13 +25,6 @@ const roomSchema = new mongoose.Schema(
       enum: {
         values: ROOM_TYPES,
         message: `Room type must be one of: ${ROOM_TYPES.join(', ')}.`,
-      },
-    },
-    bedType: {
-      type: String,
-      enum: {
-        values: BED_TYPES,
-        message: `Bed type must be one of: ${BED_TYPES.join(', ')}.`,
       },
     },
     maxGuests: {
@@ -80,6 +72,11 @@ const roomSchema = new mongoose.Schema(
     images: {
       type: [String],
       default: [],
+    },
+    suiteType: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Suite',
+      default: null,
     },
     isActive: {
       type: Boolean,

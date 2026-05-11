@@ -1,6 +1,7 @@
-const Reservation = require('../models/Reservation');
-const Room        = require('../models/Room');
-const Guest       = require('../models/Guest');
+const Reservation      = require('../models/Reservation');
+const Room             = require('../models/Room');
+const Guest            = require('../models/Guest');
+const GuestActivityLog = require('../models/GuestActivityLog');
 const { AppError } = require('../middleware/errorHandler');
 const catchAsync   = require('../utils/catchAsync');
 const { sendSuccess } = require('../utils/apiResponse');
@@ -11,7 +12,7 @@ const { validateObjectId } = require('../utils/objectId');
 const populateReservation = (query) =>
   query
     .populate('guest',     'firstName lastName email phone nationality idType idNumber isVIP totalStays')
-    .populate('room',      'roomNumber floor type typeLabel bedType view status rates')
+    .populate('room',      'roomNumber floor type typeLabel view status rates')
     .populate('createdBy', 'name email role');
 
 const buildPayload = (r) => ({
@@ -115,6 +116,15 @@ exports.checkIn = catchAsync(async (req, res, next) => {
 
   const populated = await populateReservation(Reservation.findById(reservation._id));
 
+  const staffName = req.user?.name || req.user?.email || 'Staff';
+  await GuestActivityLog.create({
+    guest:       reservation.guest,
+    reservation: reservation._id,
+    eventType:   'checked_in',
+    description: `Checked in to room ${populated.room.roomNumber} (${populated.room.typeLabel || populated.room.type}).`,
+    performedBy: staffName,
+  });
+
   sendSuccess(res, 200, `Guest checked in to room ${populated.room.roomNumber}. Key issued: ${reservation.keyIssued ? 'Yes' : 'No'}.`, {
     reservation: buildPayload(populated),
   });
@@ -183,6 +193,15 @@ exports.checkOut = catchAsync(async (req, res, next) => {
   await Guest.findByIdAndUpdate(reservation.guest, { $inc: { totalStays: 1 } });
 
   const populated = await populateReservation(Reservation.findById(reservation._id));
+
+  const staffNameCo = req.user?.name || req.user?.email || 'Staff';
+  await GuestActivityLog.create({
+    guest:       reservation.guest,
+    reservation: reservation._id,
+    eventType:   'checked_out',
+    description: `Checked out from room ${populated.room.roomNumber}. Stay complete.`,
+    performedBy: staffNameCo,
+  });
 
   // Determine if any checklist items were skipped (pending follow-up)
   const checklist = reservation.departureChecklist;

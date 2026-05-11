@@ -48,12 +48,36 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const from = location.state?.from?.pathname || '/dashboard';
+  const from = location.state?.from?.pathname;
+
+  function getDefaultRoute(role) {
+    if (role === 'guest') return '/guest';
+    if (role === 'housekeeping') return '/housekeeping';
+    if (role === 'maintenance') return '/maintenance';
+    return '/dashboard';
+  }
+
+  function canAccessRoute(role, path) {
+    if (!path) return false;
+    if (role === 'admin') return true;
+    if (role === 'manager') return true;
+    if (role === 'receptionist') {
+      return ['/dashboard', '/reservations', '/checkin', '/rooms', '/billing', '/guests'].some(prefix => path.startsWith(prefix));
+    }
+    if (role === 'housekeeping') {
+      return ['/rooms', '/housekeeping', '/maintenance'].some(prefix => path.startsWith(prefix));
+    }
+    if (role === 'maintenance') {
+      return ['/rooms', '/maintenance'].some(prefix => path.startsWith(prefix));
+    }
+    return false;
+  }
 
   // Already authenticated — skip login
   useEffect(() => {
     if (isAuthenticated) {
-      const dest = user?.role === 'guest' ? '/guest' : from;
+      const defaultRoute = getDefaultRoute(user?.role);
+      const dest = canAccessRoute(user?.role, from) ? from : defaultRoute;
       navigate(dest, { replace: true });
     }
   }, [isAuthenticated, user, navigate, from]);
@@ -80,7 +104,8 @@ export default function LoginPage() {
     try {
       const user = await login(email.trim(), password);
       toast.success(`Welcome back, ${user.name?.split(' ')[0] || 'there'}.`);
-      const dest = user.role === 'guest' ? '/guest' : from;
+      const defaultRoute = getDefaultRoute(user.role);
+      const dest = canAccessRoute(user.role, from) ? from : defaultRoute;
       navigate(dest, { replace: true });
     } catch (err) {
       const serverErrors = err.response?.data?.errors;

@@ -1,0 +1,151 @@
+LUXURYSTAY HMS — BACKEND MASTER PROMPT
+Copy everything below and paste it as your first message in Claude Code:
+
+You are building the complete backend for LuxuryStay HMS (Hotel Management System) — a high-end hotel chain management platform. Build this using Node.js + Express + MongoDB (Mongoose) with a strict MVC folder structure. Use JWT for authentication.
+Tech Stack:
+
+Runtime: Node.js
+Framework: Express.js
+Database: MongoDB with Mongoose ODM
+Auth: JWT (jsonwebtoken) + bcryptjs
+Validation: express-validator
+Environment: dotenv
+Logging: morgan
+Security: helmet, cors, express-rate-limit
+
+Folder Structure:
+luxurystay-backend/
+├── config/
+│   └── db.js
+├── controllers/
+├── middleware/
+│   ├── auth.js
+│   ├── rbac.js
+│   ├── errorHandler.js
+│   └── validate.js
+├── models/
+├── routes/
+├── utils/
+├── validators/
+├── server.js
+└── .env.example
+User Roles (RBAC): admin, manager, receptionist, housekeeping, maintenance, guest
+Build the following modules in this exact order. Complete each module fully (model + controller + routes + validation) before moving to the next:
+
+MODULE 1 — Project Foundation
+
+server.js with Express setup, middleware chain, route mounting, global error handler
+config/db.js for MongoDB connection with retry logic
+middleware/errorHandler.js — centralized async error handling, custom AppError class
+middleware/auth.js — JWT verify middleware, attach user to req
+middleware/rbac.js — role-based access control middleware, accepts array of allowed roles
+.env.example with all required variables
+
+
+MODULE 2 — User Management
+
+Model: User (name, email, password, role, phone, isActive, lastLogin, timestamps)
+Controllers: register, login, logout, getMe, updateMe, changePassword, getAllUsers, getUserById, updateUser, deactivateUser
+Routes: /api/auth (register, login) and /api/users (CRUD, admin only)
+Validators: registration and login validation rules
+Password hashing with bcrypt pre-save hook
+JWT issued on login with 7d expiry
+
+
+MODULE 3 — Guest Profiles
+
+Model: Guest (firstName, lastName, email, phone, nationality, idType, idNumber, address, preferences, totalStays, isVIP, timestamps)
+Controllers: createGuest, getAllGuests, getGuestById, updateGuest, deleteGuest, searchGuests
+Routes: /api/guests
+Access: admin, manager, receptionist
+
+
+MODULE 4 — Room Management
+
+Model: Room (roomNumber, floor, type [single/double/suite/penthouse], bedType, maxGuests, pricePerNight, weekendPrice, status [available/occupied/cleaning/maintenance/reserved], amenities[], description, images[], timestamps)
+Controllers: createRoom, getAllRooms, getRoomById, updateRoom, deleteRoom, updateRoomStatus, getRoomsByStatus, checkAvailability
+Routes: /api/rooms
+Access: varies by action (all staff can view, only admin/manager can create/delete)
+
+
+MODULE 5 — Reservations
+
+Model: Reservation (bookingId [auto-generated unique], guest [ref], room [ref], checkInDate, checkOutDate, adults, children, status [pending/confirmed/checked-in/checked-out/cancelled], addOns[], totalAmount, specialRequests, createdBy [ref], timestamps)
+Controllers: createReservation, getAllReservations, getReservationById, updateReservation, cancelReservation, getReservationsByGuest, getTodayArrivals, getTodayDepartures
+Routes: /api/reservations
+Auto-generate bookingId (format: LS-YYYYMMDD-XXXX)
+Validate room availability on creation (no double booking)
+
+
+MODULE 6 — Check-in / Check-out
+
+Controllers: checkIn, checkOut (separate from reservation update — handles room status, key issuance flag, timestamps)
+Add checkInTime, checkOutTime, keyIssued, idVerified fields to Reservation model
+On checkIn: room status → occupied, reservation status → checked-in
+On checkOut: room status → cleaning, reservation status → checked-out, trigger bill finalization
+Routes: /api/reservations/:id/checkin and /api/reservations/:id/checkout
+
+
+MODULE 7 — Billing & Invoicing
+
+Model: Invoice (invoiceNumber [auto], reservation [ref], guest [ref], lineItems [{description, quantity, unitPrice, total}], subtotal, taxRate, taxAmount, totalAmount, paymentStatus [unpaid/partial/paid], paymentMethod, paymentDate, notes, timestamps)
+Controllers: generateInvoice, getInvoiceById, getAllInvoices, updatePaymentStatus, addLineItem, getInvoiceByReservation
+Auto-calculate: room rate × nights + addOns + extras - discounts + tax
+Routes: /api/invoices
+
+
+MODULE 8 — Housekeeping
+
+Model: HousekeepingTask (room [ref], assignedTo [ref User], status [pending/in-progress/completed], priority [normal/urgent], notes, scheduledFor, completedAt, reportedIssue, timestamps)
+Controllers: createTask, getAllTasks, getTaskById, updateTask, assignTask, markComplete, getTasksByRoom, getTasksByStaff, reportIssue
+Routes: /api/housekeeping
+Access: admin, manager, housekeeping staff
+
+
+MODULE 9 — Maintenance
+
+Model: MaintenanceRequest (room [ref], reportedBy [ref User], category [plumbing/electrical/ac/furniture/other], description, photos[], priority [low/medium/high/urgent], status [open/assigned/in-progress/resolved], assignedTo [ref User], statusLog [{status, updatedBy, note, timestamp}], timestamps)
+Controllers: createRequest, getAllRequests, getRequestById, updateRequest, assignRequest, updateStatus, resolveRequest
+Routes: /api/maintenance
+
+
+MODULE 10 — Feedback & Guest Services
+
+Model: Feedback (guest [ref], reservation [ref], ratings {overall, cleanliness, service, comfort, value}, comment, staffResponse, timestamps)
+Model: ServiceRequest (guest [ref], reservation [ref], room [ref], serviceType [room-service/wake-up-call/laundry/spa/transport/amenities], details, requestedAt, status [pending/in-progress/fulfilled], assignedTo [ref], timestamps)
+Controllers for both models: full CRUD + staff response on feedback
+Routes: /api/feedback and /api/services
+
+
+MODULE 11 — Reporting & Analytics
+
+Controllers (no model needed — aggregate queries):
+
+getOccupancyReport (occupancy % by date range)
+getRevenueReport (revenue breakdown by date range)
+getGuestReport (new vs returning, nationalities)
+getRoomPerformanceReport (revenue + occupancy per room type)
+getHousekeepingReport (tasks completed, avg completion time)
+getMaintenanceReport (requests by category, resolution time)
+
+
+Routes: /api/reports (admin + manager only)
+
+
+MODULE 12 — Notifications
+
+Model: Notification (recipient [ref User], type [booking/maintenance/housekeeping/system], title, message, isRead, relatedId, relatedModel, timestamps)
+Controllers: getMyNotifications, markAsRead, markAllRead, deleteNotification
+Utility function: createNotification(userId, type, title, message) — called internally by other controllers
+Routes: /api/notifications
+
+
+General Rules for ALL modules:
+
+Every controller must be wrapped in try/catch using a catchAsync utility
+All routes must use appropriate auth + rbac middleware
+Return consistent JSON: { success: true, data: {}, message: "" } for success and { success: false, message: "", errors: [] } for errors
+Use HTTP status codes correctly (200, 201, 400, 401, 403, 404, 500)
+Paginate all list endpoints: ?page=1&limit=10, return totalCount and totalPages
+All IDs passed as params must be validated as valid MongoDB ObjectIds
+Index frequently queried fields in models (status, dates, room, guest refs)

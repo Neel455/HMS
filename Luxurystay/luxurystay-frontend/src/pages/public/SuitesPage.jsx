@@ -1,82 +1,57 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PublicShell from '../../layouts/PublicShell';
 import Icon from '../../components/Icon';
+import api from '../../lib/api';
 
-const SUITES = [
-  {
-    num:   '01',
-    name:  'Deluxe Twin',
-    sqm:   28,
-    from:  460,
-    grad:  'linear-gradient(140deg, #EFE8DB, #C9AE82)',
-    desc:  'Twin beds for travel companions or family. Garden-side aspect, full marble bathroom, walk-in shower.',
-    amenities: [
-      { icon: 'wifi',   label: 'Fibre Wi-Fi' },
-      { icon: 'coffee', label: 'Espresso' },
-      { icon: 'spa',    label: 'Bath ritual' },
-    ],
-  },
-  {
-    num:   '02',
-    name:  'Deluxe King',
-    sqm:   32,
-    from:  480,
-    grad:  'linear-gradient(140deg, #C9AE82, #A08054)',
-    desc:  'Our signature category. King bed, sitting nook, French balcony with views over the gardens or Promenade.',
-    amenities: [
-      { icon: 'wifi',   label: 'Fibre Wi-Fi' },
-      { icon: 'coffee', label: 'Espresso' },
-      { icon: 'spa',    label: 'Bath ritual' },
-    ],
-  },
-  {
-    num:   '03',
-    name:  'Junior Suite',
-    sqm:   48,
-    from:  720,
-    grad:  'linear-gradient(140deg, #A08054, #806339)',
-    desc:  'Generous proportions, separate sitting area, soaking tub overlooking the sea. Espresso service standard.',
-    amenities: [
-      { icon: 'wifi',   label: 'Fibre Wi-Fi' },
-      { icon: 'coffee', label: 'Espresso' },
-      { icon: 'spa',    label: 'Bath ritual' },
-      { icon: 'leaf',   label: 'Terrace' },
-    ],
-  },
-  {
-    num:   '04',
-    name:  'Premier Suite',
-    sqm:   76,
-    from:  1240,
-    grad:  'linear-gradient(140deg, #806339, #4A443B)',
-    desc:  'Two-bedroom configuration available. Private terrace, dressing room, dedicated butler service.',
-    amenities: [
-      { icon: 'wifi',   label: 'Fibre Wi-Fi' },
-      { icon: 'coffee', label: 'Espresso' },
-      { icon: 'spa',    label: 'Bath ritual' },
-      { icon: 'leaf',   label: 'Terrace' },
-      { icon: 'crown',  label: 'Butler',  vip: true },
-    ],
-  },
-  {
-    num:   '05',
-    name:  'Penthouse',
-    sqm:   180,
-    from:  2400,
-    grad:  'linear-gradient(140deg, #4A443B, #1A1814)',
-    desc:  'The crown of the house. Wraparound terrace with plunge pool, dining for ten, panoramic Mediterranean views.',
-    amenities: [
-      { icon: 'wifi',   label: 'Fibre Wi-Fi' },
-      { icon: 'coffee', label: 'Espresso' },
-      { icon: 'spa',    label: 'Bath ritual' },
-      { icon: 'pool',   label: 'Plunge pool' },
-      { icon: 'crown',  label: 'Butler',  vip: true },
-    ],
-  },
-];
+// Fallback gradients keyed by slug, used when a suite has no image
+const FALLBACK_GRAD = {
+  deluxe_twin:   'linear-gradient(140deg, #EFE8DB, #C9AE82)',
+  deluxe_king:   'linear-gradient(140deg, #C9AE82, #A08054)',
+  junior_suite:  'linear-gradient(140deg, #A08054, #806339)',
+  premier_suite: 'linear-gradient(140deg, #806339, #4A443B)',
+  penthouse:     'linear-gradient(140deg, #4A443B, #1A1814)',
+};
+
+function SuiteVisual({ suite, index }) {
+  const hasImage = suite.images?.length > 0;
+  const grad     = suite.gradient || FALLBACK_GRAD[suite.slug] || 'linear-gradient(140deg, #C9AE82, #A08054)';
+  const num      = String(index + 1).padStart(2, '0');
+
+  return (
+    <div style={{ aspectRatio: '4/3', position: 'relative', overflow: 'hidden' }}>
+      {hasImage ? (
+        <img
+          src={suite.images[0]}
+          alt={suite.name}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
+      ) : (
+        <div style={{ width: '100%', height: '100%', background: grad }}>
+          <div style={{
+            position: 'absolute', top: 24, left: 24,
+            fontFamily: 'var(--serif)', fontSize: 96, fontStyle: 'italic',
+            color: 'rgba(247,243,236,0.18)', lineHeight: 0.9,
+          }}>
+            {num}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function SuitesPage() {
   const navigate = useNavigate();
+  const [suites,  setSuites]  = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get('/api/suites')
+      .then(r => setSuites(r.data?.data?.suites ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <PublicShell>
@@ -98,11 +73,25 @@ export default function SuitesPage() {
 
       {/* ── Suite list ───────────────────────────────────────────────── */}
       <section style={{ padding: '0 64px 100px', maxWidth: 1280, margin: '0 auto' }}>
-        {SUITES.map((suite, i) => {
+
+        {loading && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--mute)', padding: '60px 0' }}>
+            <div className="spinner" style={{ width: 18, height: 18 }} />
+            Loading suites…
+          </div>
+        )}
+
+        {!loading && suites.length === 0 && (
+          <div style={{ padding: '60px 0', color: 'var(--mute)', fontSize: 14 }}>
+            Suite details coming soon. Please contact our concierge for availability.
+          </div>
+        )}
+
+        {!loading && suites.map((suite, i) => {
           const imageLeft = i % 2 !== 0;
           return (
             <div
-              key={suite.num}
+              key={suite.id}
               style={{
                 display: 'grid',
                 gridTemplateColumns: imageLeft ? '1fr 1.2fr' : '1.2fr 1fr',
@@ -112,29 +101,13 @@ export default function SuitesPage() {
                 borderTop: i > 0 ? '1px solid var(--hairline-2)' : 'none',
               }}
             >
-              {/* Gradient image */}
-              <div
-                style={{
-                  order: imageLeft ? 0 : 1,
-                  aspectRatio: '4/3',
-                  background: suite.grad,
-                  position: 'relative',
-                  overflow: 'hidden',
-                }}
-              >
-                <div style={{
-                  position: 'absolute', top: 24, left: 24,
-                  fontFamily: 'var(--serif)', fontSize: 96, fontStyle: 'italic',
-                  color: 'rgba(247, 243, 236, 0.18)', lineHeight: 0.9,
-                }}>
-                  {suite.num}
-                </div>
+              <div style={{ order: imageLeft ? 0 : 1 }}>
+                <SuiteVisual suite={suite} index={i} />
               </div>
 
-              {/* Suite details */}
               <div style={{ order: imageLeft ? 1 : 0 }}>
                 <div className="eyebrow" style={{ marginBottom: 14 }}>
-                  Category {suite.num} · {suite.sqm} m²
+                  Category {String(i + 1).padStart(2, '0')}{suite.sqm ? ` · ${suite.sqm} m²` : ''}
                 </div>
                 <h2
                   className="display"
@@ -142,35 +115,41 @@ export default function SuitesPage() {
                 >
                   {suite.name}
                 </h2>
-                <p style={{ fontSize: 15, color: 'var(--ink-3)', lineHeight: 1.7, marginBottom: 28, maxWidth: 480 }}>
-                  {suite.desc}
-                </p>
+                {suite.description && (
+                  <p style={{ fontSize: 15, color: 'var(--ink-3)', lineHeight: 1.7, marginBottom: 28, maxWidth: 480 }}>
+                    {suite.description}
+                  </p>
+                )}
 
-                {/* Amenity chips */}
-                <div style={{ display: 'flex', gap: 6, marginBottom: 28, flexWrap: 'wrap' }}>
-                  {suite.amenities.map((a, j) => (
-                    <span
-                      key={j}
-                      className={a.vip ? 'chip chip-vip' : 'chip chip-reserved'}
-                      style={{ display: 'flex', alignItems: 'center', gap: 5 }}
-                    >
-                      <Icon name={a.icon} size={10} />
-                      {a.label}
-                    </span>
-                  ))}
-                </div>
+                {suite.amenities?.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 28, flexWrap: 'wrap' }}>
+                    {suite.amenities.map((a, j) => (
+                      <span
+                        key={j}
+                        className={a.vip ? 'chip chip-vip' : 'chip chip-reserved'}
+                        style={{ display: 'flex', alignItems: 'center', gap: 5 }}
+                      >
+                        <Icon name={a.icon} size={10} />
+                        {a.label}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
-                {/* Price + CTA */}
                 <div style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
                   paddingTop: 24, borderTop: '1px solid var(--hairline)',
                 }}>
                   <div>
-                    <div className="label">From</div>
-                    <div className="display numeral" style={{ fontSize: 40, lineHeight: 1, marginTop: 4 }}>
-                      €{suite.from.toLocaleString()}
-                      <span style={{ fontSize: 14, color: 'var(--mute)', marginLeft: 6 }}>/ night</span>
-                    </div>
+                    {suite.baseRate != null && (
+                      <>
+                        <div className="label">From</div>
+                        <div className="display numeral" style={{ fontSize: 40, lineHeight: 1, marginTop: 4 }}>
+                          €{Number(suite.baseRate).toLocaleString()}
+                          <span style={{ fontSize: 14, color: 'var(--mute)', marginLeft: 6 }}>/ night</span>
+                        </div>
+                      </>
+                    )}
                   </div>
                   <button
                     className="btn btn-primary"
@@ -187,14 +166,9 @@ export default function SuitesPage() {
 
       {/* ── Bottom CTA band ──────────────────────────────────────────── */}
       <section style={{
-        background: 'var(--linen)',
-        border: '1px solid var(--hairline)',
-        margin: '0 64px 80px',
-        padding: '48px 56px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: 40,
+        background: 'var(--linen)', border: '1px solid var(--hairline)',
+        margin: '0 64px 80px', padding: '48px 56px',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 40,
       }}>
         <div>
           <div className="eyebrow" style={{ marginBottom: 10 }}>Not sure which suite?</div>
@@ -204,18 +178,10 @@ export default function SuitesPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 12, flexShrink: 0 }}>
-          <button
-            className="btn btn-ghost"
-            style={{ padding: '12px 24px' }}
-            onClick={() => navigate('/contact')}
-          >
+          <button className="btn btn-ghost" style={{ padding: '12px 24px' }} onClick={() => navigate('/contact')}>
             <Icon name="mail" size={13} /> Contact concierge
           </button>
-          <button
-            className="btn btn-primary"
-            style={{ padding: '12px 24px' }}
-            onClick={() => navigate('/book')}
-          >
+          <button className="btn btn-primary" style={{ padding: '12px 24px' }} onClick={() => navigate('/book')}>
             Reserve now <Icon name="arrow_right" size={12} />
           </button>
         </div>

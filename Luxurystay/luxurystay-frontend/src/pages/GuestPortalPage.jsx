@@ -8,6 +8,110 @@ import api from '../lib/api';
 import Icon from '../components/Icon';
 import PublicShell from '../layouts/PublicShell';
 
+// ─── History panel ────────────────────────────────────────────────────────────
+
+const EVENT_CONFIG = {
+  booking_created:        { icon: 'calendar', color: '#2D7A4F', label: 'Reservation created' },
+  checked_in:             { icon: 'key',      color: '#A07830', label: 'Checked in' },
+  checked_out:            { icon: 'check',    color: '#6B6459', label: 'Checked out' },
+  booking_cancelled:      { icon: 'x',        color: '#B94040', label: 'Reservation cancelled' },
+  staff_forced_available: { icon: 'wrench',   color: '#B94040', label: 'Room released by staff' },
+};
+
+function HistoryPanel({ onClose }) {
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    api.get('/api/guest/history')
+      .then(r => setHistory(r.data?.data?.history ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', justifyContent: 'flex-end' }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(26,24,20,0.35)' }} />
+      <div style={{
+        position: 'relative', width: 400, background: 'var(--paper)',
+        borderLeft: '1px solid var(--hairline)', height: '100%',
+        overflowY: 'auto', display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{ padding: '28px 28px 20px', borderBottom: '1px solid var(--hairline)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div className="eyebrow" style={{ marginBottom: 6 }}>My account</div>
+            <h2 className="display" style={{ fontSize: 26, margin: 0 }}>Stay history</h2>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: '1px solid var(--hairline)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)', flexShrink: 0 }}>
+            <Icon name="x" size={14} />
+          </button>
+        </div>
+
+        <div style={{ padding: '24px 28px', flex: 1 }}>
+          {loading && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--mute)', fontSize: 13 }}>
+              <div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5 }} />
+              Loading history…
+            </div>
+          )}
+          {!loading && history.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '40px 0', fontSize: 13, color: 'var(--mute)' }}>
+              No activity recorded yet.
+            </div>
+          )}
+          {!loading && history.length > 0 && (
+            <div style={{ position: 'relative' }}>
+              <div style={{ position: 'absolute', left: 15, top: 20, bottom: 20, width: 1, background: 'var(--hairline)' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {history.map((entry, i) => {
+                  const cfg = EVENT_CONFIG[entry.eventType] || { icon: 'star', color: 'var(--brass)', label: entry.eventType };
+                  const date = new Date(entry.createdAt);
+                  const dateStr = date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                  const timeStr = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                  return (
+                    <div key={entry._id || i} style={{ display: 'flex', gap: 16, paddingBottom: 24, position: 'relative' }}>
+                      <div style={{
+                        width: 30, height: 30, flexShrink: 0, borderRadius: '50%',
+                        background: 'var(--paper)', border: `2px solid ${cfg.color}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: cfg.color, zIndex: 1,
+                      }}>
+                        <Icon name={cfg.icon} size={13} />
+                      </div>
+                      <div style={{ paddingTop: 4, flex: 1 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: cfg.color, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>
+                          {cfg.label}
+                        </div>
+                        <div style={{ fontSize: 13, color: 'var(--ink)', lineHeight: 1.5, marginBottom: 6 }}>
+                          {entry.description}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--mute)' }}>
+                          {dateStr} · {timeStr}
+                          {entry.performedBy && entry.performedBy !== 'Guest Portal' && (
+                            <span style={{ marginLeft: 6, color: 'var(--ink-3)' }}>— {entry.performedBy}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: '16px 28px', borderTop: '1px solid var(--hairline)' }}>
+          <Link to="/settings" style={{ fontSize: 13, color: 'var(--brass-deep)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="arrow_right" size={12} /> Profile &amp; settings
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function greeting() {
@@ -373,6 +477,69 @@ function ReservationDetailPanel({ reservation: r, onClose, onCancel, cancelling 
   );
 }
 
+// ─── Cancel confirmation modal ────────────────────────────────────────────────
+
+function CancelConfirmModal({ onConfirm, onCancel }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 300,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 24,
+    }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(26,24,20,0.55)' }} onClick={onCancel} />
+      <div style={{
+        position: 'relative', background: 'var(--paper)',
+        border: '1px solid var(--hairline)', width: '100%', maxWidth: 420,
+        overflow: 'hidden',
+      }}>
+        {/* Warning banner */}
+        <div style={{
+          background: 'var(--terracotta-soft, #FBE8E8)',
+          borderBottom: '1px solid var(--terracotta)',
+          padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 12,
+        }}>
+          <div style={{
+            width: 36, height: 36, flexShrink: 0, borderRadius: '50%',
+            background: 'var(--terracotta)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', color: 'var(--ivory)',
+          }}>
+            <Icon name="alert" size={17} />
+          </div>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--terracotta)' }}>Cancel reservation</div>
+            <div style={{ fontSize: 11, color: 'var(--terracotta)', opacity: 0.8, marginTop: 1 }}>
+              This action cannot be undone
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: '24px 24px 20px' }}>
+          <p style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--ink)', margin: '0 0 12px' }}>
+            Are you sure you want to <strong>cancel this reservation?</strong>
+          </p>
+          <p style={{ fontSize: 13, lineHeight: 1.65, color: 'var(--ink-3)', margin: 0 }}>
+            Once cancelled, you will need to make a new reservation to stay with us.
+            Please contact our concierge if you need to modify your booking instead.
+          </p>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '14px 24px 20px', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button className="btn btn-ghost" onClick={onCancel}>Keep reservation</button>
+          <button
+            className="btn btn-primary"
+            style={{ background: 'var(--terracotta)', borderColor: 'var(--terracotta)' }}
+            onClick={onConfirm}
+          >
+            <Icon name="x" size={13} /> Yes, cancel it
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function GuestPortalPage() {
@@ -381,25 +548,30 @@ export default function GuestPortalPage() {
   const toast      = useToast();
 
   const queryClient = useQueryClient();
-  const [serviceModal,   setServiceModal]   = useState(null);
-  const [maintModal,     setMaintModal]     = useState(false);
-  const [displayIndex,   setDisplayIndex]   = useState(0);
-  const [cancellingId,     setCancellingId]     = useState(null);
+  const [serviceModal,      setServiceModal]      = useState(null);
+  const [maintModal,        setMaintModal]        = useState(false);
+  const [displayIndex,      setDisplayIndex]      = useState(0);
+  const [cancellingId,      setCancellingId]      = useState(null);
+  const [cancelTarget,      setCancelTarget]      = useState(null);
   const [detailReservation, setDetailReservation] = useState(null);
+  const [showHistory,       setShowHistory]       = useState(false);
 
   const { data: resData, loading: resLoading } =
     useApi('/api/guest/reservations');
 
   const reservations = resData?.reservations ?? [];
 
-  // Active stay always pinned first; the rest are upcoming/pending sorted by check-in
-  const activeStay = reservations.find(r => r.status === 'checked-in');
+  // All checked-in stays pinned first (sorted by check-in), then upcoming/pending
+  const activeStays = reservations
+    .filter(r => r.status === 'checked-in')
+    .sort((a, b) => new Date(a.checkIn) - new Date(b.checkIn));
   const upcomingStays = reservations
     .filter(r => ['confirmed', 'pending'].includes(r.status))
     .sort((a, b) => new Date(a.checkIn) - new Date(b.checkIn));
-  const displayStays = activeStay
-    ? [activeStay, ...upcomingStays]
-    : upcomingStays;
+  const displayStays = [...activeStays, ...upcomingStays];
+
+  // Keep `activeStay` for places that reference the primary in-progress stay
+  const activeStay = activeStays[0] || null;
 
   const safeIndex   = Math.min(displayIndex, Math.max(displayStays.length - 1, 0));
   const displayStay = displayStays[safeIndex] || null;
@@ -419,12 +591,17 @@ export default function GuestPortalPage() {
   }, [toast]);
 
   // ── Cancel reservation ────────────────────────────────────────────────────
-  const handleCancelReservation = useCallback(async (reservationId) => {
-    if (!window.confirm('Are you sure you want to cancel this reservation? This cannot be undone.')) return;
+  const handleCancelReservation = useCallback((reservationId) => {
+    setCancelTarget(reservationId);
+  }, []);
+
+  const doCancel = useCallback(async () => {
+    const reservationId = cancelTarget;
+    setCancelTarget(null);
     setCancellingId(reservationId);
     try {
-      await api.patch(`/api/reservations/${reservationId}/cancel`);
-      toast.success('Reservation cancelled successfully.');
+      await api.patch(`/api/guest/reservations/${reservationId}/cancel`);
+      toast.success('Reservation cancelled.');
       setDetailReservation(null);
       queryClient.invalidateQueries({ queryKey: ['/api/guest/reservations'] });
     } catch (err) {
@@ -432,7 +609,7 @@ export default function GuestPortalPage() {
     } finally {
       setCancellingId(null);
     }
-  }, [toast, queryClient]);
+  }, [cancelTarget, toast, queryClient]);
 
   // ── Maintenance submit ─────────────────────────────────────────────────────
   const handleMaintSubmit = useCallback(async (category, description) => {
@@ -472,6 +649,13 @@ export default function GuestPortalPage() {
           cancelling={cancellingId === detailReservation._id}
         />
       )}
+      {showHistory && <HistoryPanel onClose={() => setShowHistory(false)} />}
+      {cancelTarget && (
+        <CancelConfirmModal
+          onConfirm={doCancel}
+          onCancel={() => setCancelTarget(null)}
+        />
+      )}
 
       <section style={{ padding: '60px 64px 80px', maxWidth: 1280, margin: '0 auto' }}>
 
@@ -492,19 +676,25 @@ export default function GuestPortalPage() {
               {greeting()}, <em>{user?.name?.split(' ')[0] || 'dear guest'}.</em>
             </h1>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            onClick={() => setShowHistory(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: '6px 10px', borderRadius: 'var(--radius-sm)', transition: 'background 0.15s' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--linen)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            title="View stay history"
+          >
             <div className="avatar avatar-lg">{initials}</div>
-            <div>
+            <div style={{ textAlign: 'left' }}>
               <div style={{ fontWeight: 500 }}>{user?.name || user?.email}</div>
               <div style={{ fontSize: 10, color: 'var(--mute)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                Étoile member
+                Étoile member · History
               </div>
             </div>
-          </div>
+          </button>
         </div>
 
         <p style={{ fontSize: 15, color: 'var(--ink-3)', maxWidth: 540, marginBottom: 36, lineHeight: 1.7 }}>
-          {activeStay && safeIndex === 0
+          {displayStay?.status === 'checked-in'
             ? 'Below, your stay at a glance — should anything be wanting, the concierge stands ready.'
             : displayStay
               ? `Your reservation is confirmed. We look forward to welcoming you on ${fmtShort(displayStay.checkIn)}.`
@@ -521,7 +711,7 @@ export default function GuestPortalPage() {
               marginBottom: displayStays.length > 1 ? 12 : 40,
             }}>
               <Mini label="Check-out"        value={fmtShort(displayStay.checkOut)} />
-              <Mini label="Nights remaining"  value={activeStay && safeIndex === 0 ? nightsRemaining(displayStay.checkOut) : displayStay.nights} />
+              <Mini label="Nights remaining"  value={displayStay?.status === 'checked-in' ? nightsRemaining(displayStay.checkOut) : displayStay.nights} />
               <Mini label="Folio · total"    value={`€${Number(displayStay.totalAmount || 0).toLocaleString()}`} />
               <Mini label="Status"           value={STATUS_STYLE[displayStay.status]?.label || displayStay.status} />
             </div>
@@ -671,7 +861,7 @@ export default function GuestPortalPage() {
                 )}
                 {!resLoading && reservations.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {reservations.map(r => {
+                    {reservations.slice(0, 3).map(r => {
                       const cancellable  = ['pending', 'confirmed'].includes(r.status);
                       const isCancelling = cancellingId === r._id;
                       return (
@@ -727,6 +917,19 @@ export default function GuestPortalPage() {
                         </div>
                       );
                     })}
+                    {reservations.length > 3 && (
+                      <button
+                        onClick={() => setShowHistory(true)}
+                        style={{
+                          background: 'none', border: '1px solid var(--hairline)',
+                          padding: '10px 16px', cursor: 'pointer', fontSize: 12,
+                          letterSpacing: '0.08em', textTransform: 'uppercase',
+                          color: 'var(--ink-3)', width: '100%', textAlign: 'center',
+                        }}
+                      >
+                        View all {reservations.length} reservations
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

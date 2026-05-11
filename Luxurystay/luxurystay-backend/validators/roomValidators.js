@@ -3,7 +3,6 @@ const { body, query, param } = require('express-validator');
 const ROOM_TYPES   = ['deluxe_twin', 'deluxe_king', 'junior_suite', 'premier_suite', 'penthouse'];
 const ROOM_STATUS  = ['available', 'occupied', 'cleaning', 'maintenance', 'reserved'];
 const VIEW_TYPES   = ['sea_view', 'garden_view', 'city_view', 'courtyard_view', 'pool_view'];
-const BED_TYPES    = ['twin', 'king', 'queen', 'double', 'king_sofa', 'twin_sofa'];
 
 const rateField = (name) =>
   body(`rates.${name}`)
@@ -30,10 +29,6 @@ exports.createRoomValidator = [
   body('type')
     .notEmpty().withMessage('Room type is required.')
     .isIn(ROOM_TYPES).withMessage(`Room type must be one of: ${ROOM_TYPES.join(', ')}.`),
-
-  body('bedType')
-    .optional({ nullable: true, checkFalsy: true })
-    .isIn(BED_TYPES).withMessage(`Bed type must be one of: ${BED_TYPES.join(', ')}.`),
 
   body('maxGuests')
     .notEmpty().withMessage('Max guests is required.')
@@ -91,10 +86,6 @@ exports.updateRoomValidator = [
   body('type')
     .optional()
     .isIn(ROOM_TYPES).withMessage(`Room type must be one of: ${ROOM_TYPES.join(', ')}.`),
-
-  body('bedType')
-    .optional({ nullable: true, checkFalsy: true })
-    .isIn(BED_TYPES).withMessage(`Bed type must be one of: ${BED_TYPES.join(', ')}.`),
 
   body('maxGuests')
     .optional()

@@ -5,7 +5,9 @@
       "Bash(Select-Object FullName, PSIsContainer)",
       "Bash(ConvertTo-Json)",
       "Bash(Out-String)",
-      "Bash(Get-ChildItem *)"
+      "Bash(Get-ChildItem *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }

@@ -12,7 +12,9 @@ router.get('/rooms', guestSelfController.getAvailableRooms);
 router.use(protect);
 router.use(authorize('guest'));
 
-router.get('/reservations',  guestSelfController.getMyReservations);
+router.get('/reservations',                         guestSelfController.getMyReservations);
+router.patch('/reservations/:id/cancel',            guestSelfController.cancelMyReservation);
+router.get('/history',                              guestSelfController.getMyHistory);
 router.post('/feedback',     guestSelfController.submitFeedback);
 router.post('/book',         guestSelfController.createBooking);
 router.post('/service',      guestSelfController.submitServiceRequest);

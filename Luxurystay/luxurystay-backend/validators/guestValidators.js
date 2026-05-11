@@ -59,7 +59,6 @@ exports.createGuestValidator = [
   body('address.zipCode').optional().trim(),
 
   body('preferences.roomType').optional().trim(),
-  body('preferences.bedType').optional().trim(),
   body('preferences.floorLevel').optional().trim(),
   body('preferences.smoking').optional().isBoolean().withMessage('Smoking preference must be true or false.'),
   body('preferences.extraPillow').optional().isBoolean().withMessage('Extra pillow preference must be true or false.'),
@@ -130,7 +129,6 @@ exports.updateGuestValidator = [
   body('address.zipCode').optional().trim(),
 
   body('preferences.roomType').optional().trim(),
-  body('preferences.bedType').optional().trim(),
   body('preferences.floorLevel').optional().trim(),
   body('preferences.smoking').optional().isBoolean().withMessage('Smoking preference must be true or false.'),
   body('preferences.extraPillow').optional().isBoolean().withMessage('Extra pillow preference must be true or false.'),

@@ -239,55 +239,59 @@ function NewRequestModal({ onClose, onSaved, rooms }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" style={{ width: 480 }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+
+        <div className="modal-head">
           <div>
-            <div className="eyebrow" style={{ marginBottom: 4 }}>Maintenance</div>
-            <h2 className="display" style={{ fontSize: 28, margin: 0 }}>New request</h2>
+            <div className="eyebrow" style={{ marginBottom: 3 }}>Maintenance</div>
+            <h2 className="display" style={{ fontSize: 22, margin: 0, lineHeight: 1.1 }}>New request</h2>
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={onClose}><Icon name="close" size={14} /></button>
+          <button onClick={onClose} style={{ background: 'none', border: '1px solid var(--hairline)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)', flexShrink: 0 }}>
+            <Icon name="x" size={14} />
+          </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-          <div className="field">
-            <label>Room (optional)</label>
-            <select value={form.room} onChange={e => set('room', e.target.value)}>
-              <option value="">— Common area / N/A —</option>
-              {rooms.map(r => (
-                <option key={r._id} value={r._id}>{r.roomNumber} · {r.type?.replace('_',' ')}</option>
-              ))}
-            </select>
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div className="field" style={{ margin: 0 }}>
+              <label>Room (optional)</label>
+              <select value={form.room} onChange={e => set('room', e.target.value)}>
+                <option value="">— Common area / N/A —</option>
+                {rooms.map(r => (
+                  <option key={r._id} value={r._id}>{r.roomNumber} · {r.type?.replace('_',' ')}</option>
+                ))}
+              </select>
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label>Category</label>
+              <select value={form.category} onChange={e => set('category', e.target.value)}>
+                {CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
+              </select>
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label>Priority</label>
+              <select value={form.priority} onChange={e => set('priority', e.target.value)}>
+                {PRIORITIES.map(p => <option key={p} value={p}>{PRIORITY_CONFIG[p].label}</option>)}
+              </select>
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label>Short title (optional)</label>
+              <input value={form.title} onChange={e => set('title', e.target.value)} placeholder="e.g. AC not cooling" />
+            </div>
           </div>
-          <div className="field">
-            <label>Category</label>
-            <select value={form.category} onChange={e => set('category', e.target.value)}>
-              {CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
-            </select>
-          </div>
-          <div className="field">
-            <label>Priority</label>
-            <select value={form.priority} onChange={e => set('priority', e.target.value)}>
-              {PRIORITIES.map(p => <option key={p} value={p}>{PRIORITY_CONFIG[p].label}</option>)}
-            </select>
-          </div>
-          <div className="field">
-            <label>Short title (optional)</label>
-            <input value={form.title} onChange={e => set('title', e.target.value)} placeholder="e.g. AC not cooling" />
+          <div className="field" style={{ margin: 0 }}>
+            <label>Description *</label>
+            <textarea value={form.description} onChange={e => set('description', e.target.value)}
+              style={{ minHeight: 88, resize: 'vertical' }}
+              placeholder="Describe the issue in detail…" />
           </div>
         </div>
 
-        <div className="field" style={{ marginBottom: 24 }}>
-          <label>Description *</label>
-          <textarea value={form.description} onChange={e => set('description', e.target.value)}
-            style={{ minHeight: 88, resize: 'vertical' }}
-            placeholder="Describe the issue in detail…" />
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+        <div className="modal-foot">
+          <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
           <button className="btn btn-primary" onClick={handleCreate} disabled={saving}
             style={{ opacity: saving ? 0.7 : 1 }}>
             {saving
-              ? <><div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Submitting…</>
+              ? <><div className="spinner" style={{ width: 13, height: 13, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Submitting…</>
               : <><Icon name="plus" size={12} />Submit request</>}
           </button>
         </div>

@@ -33,16 +33,16 @@ async function seed() {
 
   // ── Rooms ──────────────────────────────────────────────────────────────────
   const rooms = [
-    { roomNumber: '101', type: 'deluxe_twin',   bedType: 'twin',  floor: 1, maxGuests: 2, status: 'available',   rates: { low: 150, standard: 180, high: 220, peak: 280 }, amenities: ['wifi','tv','minibar'] },
-    { roomNumber: '102', type: 'deluxe_twin',   bedType: 'twin',  floor: 1, maxGuests: 2, status: 'occupied',    rates: { low: 150, standard: 180, high: 220, peak: 280 }, amenities: ['wifi','tv'] },
-    { roomNumber: '103', type: 'deluxe_twin',   bedType: 'twin',  floor: 1, maxGuests: 2, status: 'cleaning',    rates: { low: 150, standard: 180, high: 220, peak: 280 }, amenities: ['wifi','tv'] },
-    { roomNumber: '201', type: 'deluxe_king',   bedType: 'king',  floor: 2, maxGuests: 2, status: 'available',   rates: { low: 220, standard: 280, high: 340, peak: 420 }, amenities: ['wifi','tv','minibar','bathtub'] },
-    { roomNumber: '202', type: 'deluxe_king',   bedType: 'king',  floor: 2, maxGuests: 2, status: 'occupied',    rates: { low: 220, standard: 280, high: 340, peak: 420 }, amenities: ['wifi','tv','minibar','bathtub'] },
-    { roomNumber: '203', type: 'deluxe_king',   bedType: 'king',  floor: 2, maxGuests: 2, status: 'maintenance', rates: { low: 220, standard: 280, high: 340, peak: 420 }, amenities: ['wifi','tv','minibar'] },
-    { roomNumber: '301', type: 'junior_suite',  bedType: 'king',  floor: 3, maxGuests: 3, status: 'available',   rates: { low: 380, standard: 480, high: 580, peak: 720 }, amenities: ['wifi','tv','minibar','bathtub','balcony'] },
-    { roomNumber: '302', type: 'junior_suite',  bedType: 'queen', floor: 3, maxGuests: 3, status: 'occupied',    rates: { low: 380, standard: 480, high: 580, peak: 720 }, amenities: ['wifi','tv','minibar','bathtub','balcony'] },
-    { roomNumber: '401', type: 'premier_suite', bedType: 'king',  floor: 4, maxGuests: 3, status: 'available',   rates: { low: 620, standard: 780, high: 940, peak: 1150 }, amenities: ['wifi','tv','minibar','bathtub','balcony','jacuzzi'] },
-    { roomNumber: '501', type: 'penthouse',     bedType: 'king',  floor: 5, maxGuests: 4, status: 'available',   rates: { low: 900, standard: 1100, high: 1400, peak: 1800 }, amenities: ['wifi','tv','minibar','bathtub','balcony','jacuzzi'] },
+    { roomNumber: '101', type: 'deluxe_twin',   floor: 1, maxGuests: 2, status: 'available',   rates: { low: 150, standard: 180, high: 220, peak: 280 }, amenities: ['wifi','tv','minibar'] },
+    { roomNumber: '102', type: 'deluxe_twin',   floor: 1, maxGuests: 2, status: 'occupied',    rates: { low: 150, standard: 180, high: 220, peak: 280 }, amenities: ['wifi','tv'] },
+    { roomNumber: '103', type: 'deluxe_twin',   floor: 1, maxGuests: 2, status: 'cleaning',    rates: { low: 150, standard: 180, high: 220, peak: 280 }, amenities: ['wifi','tv'] },
+    { roomNumber: '201', type: 'deluxe_king',   floor: 2, maxGuests: 2, status: 'available',   rates: { low: 220, standard: 280, high: 340, peak: 420 }, amenities: ['wifi','tv','minibar','bathtub'] },
+    { roomNumber: '202', type: 'deluxe_king',   floor: 2, maxGuests: 2, status: 'occupied',    rates: { low: 220, standard: 280, high: 340, peak: 420 }, amenities: ['wifi','tv','minibar','bathtub'] },
+    { roomNumber: '203', type: 'deluxe_king',   floor: 2, maxGuests: 2, status: 'maintenance', rates: { low: 220, standard: 280, high: 340, peak: 420 }, amenities: ['wifi','tv','minibar'] },
+    { roomNumber: '301', type: 'junior_suite',  floor: 3, maxGuests: 3, status: 'available',   rates: { low: 380, standard: 480, high: 580, peak: 720 }, amenities: ['wifi','tv','minibar','bathtub','balcony'] },
+    { roomNumber: '302', type: 'junior_suite',  floor: 3, maxGuests: 3, status: 'occupied',    rates: { low: 380, standard: 480, high: 580, peak: 720 }, amenities: ['wifi','tv','minibar','bathtub','balcony'] },
+    { roomNumber: '401', type: 'premier_suite', floor: 4, maxGuests: 3, status: 'available',   rates: { low: 620, standard: 780, high: 940, peak: 1150 }, amenities: ['wifi','tv','minibar','bathtub','balcony','jacuzzi'] },
+    { roomNumber: '501', type: 'penthouse',     floor: 5, maxGuests: 4, status: 'available',   rates: { low: 900, standard: 1100, high: 1400, peak: 1800 }, amenities: ['wifi','tv','minibar','bathtub','balcony','jacuzzi'] },
   ];
 
   for (const r of rooms) {

@@ -26,9 +26,10 @@ import GuestsPage   from './pages/GuestsPage';
 import FeedbackPage from './pages/FeedbackPage';
 
 // Admin
-import AnalyticsPage from './pages/AnalyticsPage';
-import StaffPage     from './pages/StaffPage';
-import SettingsPage  from './pages/SettingsPage';
+import AnalyticsPage   from './pages/AnalyticsPage';
+import SuitesAdminPage from './pages/SuitesAdminPage';
+import StaffPage       from './pages/StaffPage';
+import SettingsPage    from './pages/SettingsPage';
 
 const ADMIN_MGR = ['admin', 'manager'];
 const DESK      = ['admin', 'manager', 'receptionist'];
@@ -81,6 +82,7 @@ export default function App() {
 
         {/* Administration */}
         <Route path="/analytics" element={<ProtectedRoute roles={ADMIN_MGR}><AnalyticsPage /></ProtectedRoute>} />
+        <Route path="/suite-types" element={<ProtectedRoute roles={['admin']}><SuitesAdminPage /></ProtectedRoute>} />
         <Route path="/staff"     element={<ProtectedRoute roles={['admin']}><StaffPage /></ProtectedRoute>} />
         <Route path="/settings"  element={<ProtectedRoute roles={['admin']}><SettingsPage /></ProtectedRoute>} />
       </Route>

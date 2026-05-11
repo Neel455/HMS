@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(node -e ' *)",
+      "Bash(Get-ChildItem *)",
+      "Bash(grep -r \"notif\\\\|Notif\\\\|alert\\\\|Alert\" \"E:/aptech/office/luxurystay-backend\" --include=\"*.js\" --include=\"*.jsx\" ! -path \"*/node_modules/*\")",
+      "Bash(grep *)",
+      "Bash(Select-Object FullName)",
+      "Bash(npm run *)",
+      "Bash(node -e \"const fs=require\\('fs'\\); const routes=fs.readdirSync\\('./routes'\\).filter\\(f=>f.endsWith\\('.js'\\)\\); console.log\\(routes.join\\('\\\\n'\\)\\);\")",
+      "Bash(findstr \"start\\\\|dev\\\\|scripts\")",
+      "PowerShell(Start-Process powershell -Verb RunAs -ArgumentList '-NoExit', '-Command', 'Start-Service -Name MongoDB; Get-Service -Name MongoDB' -WindowStyle Normal)",
+      "PowerShell(Set-ExecutionPolicy *)",
+      "Bash(node seed.js)",
+      "Bash(npx vite *)",
+      "PowerShell(Stop-Process *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(Start-Sleep 3)",
+      "Bash(Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object LocalPort, OwningProcess)",
+      "PowerShell(Get-NetTCPConnection *)"
+    ]
+  }
+}

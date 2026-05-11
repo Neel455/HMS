@@ -18,6 +18,7 @@ const NAV = [
   ]},
   { section: 'Administration', items: [
     { id: 'analytics', label: 'Analytics',    icon: 'chart',    path: '/analytics', roles: ['admin', 'manager'] },
+    { id: 'suites',    label: 'Suites',        icon: 'star',     path: '/suite-types', roles: ['admin'] },
     { id: 'staff',     label: 'Staff & Roles',icon: 'users',    path: '/staff',     roles: ['admin'] },
     { id: 'settings',  label: 'Settings',     icon: 'settings', path: '/settings',  roles: ['admin'] },
   ]},

@@ -4,6 +4,8 @@ const Reservation        = require('../models/Reservation');
 const Feedback           = require('../models/Feedback');
 const ServiceRequest     = require('../models/ServiceRequest');
 const MaintenanceRequest = require('../models/MaintenanceRequest');
+const GuestActivityLog   = require('../models/GuestActivityLog');
+const Suite              = require('../models/Suite');
 const { AppError }    = require('../middleware/errorHandler');
 const catchAsync      = require('../utils/catchAsync');
 const { sendSuccess } = require('../utils/apiResponse');
@@ -154,11 +156,29 @@ exports.getAvailableRooms = catchAsync(async (req, res, next) => {
     byType[r.type].count++;
   });
 
+  // Enrich each type with Suite marketing content (description, sqm, images, gradient, amenities)
+  const slugs  = Object.keys(byType);
+  const suites = await Suite.find({ slug: { $in: slugs }, isActive: true }).lean();
+  suites.forEach(s => {
+    if (byType[s.slug]) {
+      byType[s.slug].suiteId    = s._id;
+      byType[s.slug].description = s.description || null;
+      byType[s.slug].sqm         = s.sqm         || null;
+      byType[s.slug].gradient    = s.gradient     || null;
+      byType[s.slug].amenities   = s.amenities    || [];
+      byType[s.slug].images      = s.images       || [];
+      byType[s.slug].sortOrder   = s.sortOrder    ?? 99;
+    }
+  });
+
+  // Sort by suite sortOrder so the order matches admin configuration
+  const types = Object.values(byType).sort((a, b) => (a.sortOrder ?? 99) - (b.sortOrder ?? 99));
+
   sendSuccess(res, 200, `${rooms.length} room(s) available.`, {
     checkIn,
     checkOut,
     nights,
-    types: Object.values(byType),
+    types,
   });
 });
 
@@ -258,6 +278,14 @@ exports.createBooking = catchAsync(async (req, res, next) => {
 
   // Populate room for response
   await reservation.populate('room', 'roomNumber floor type');
+
+  await GuestActivityLog.create({
+    guest:       guest._id,
+    reservation: reservation._id,
+    eventType:   'booking_created',
+    description: `Reservation created for ${TYPE_DISPLAY[reservation.room.type] || reservation.room.type}, check-in ${checkIn}, check-out ${checkOut}. Total €${totalAmount}.`,
+    performedBy: 'Guest Portal',
+  });
 
   sendSuccess(res, 201, 'Booking request submitted successfully.', {
     booking: {
@@ -364,4 +392,64 @@ exports.submitMaintenanceReport = catchAsync(async (req, res, next) => {
   sendSuccess(res, 201, 'Maintenance report submitted. We will attend within the hour.', {
     requestId: request.requestId,
   });
+});
+
+/**
+ * PATCH /api/guest/reservations/:id/cancel
+ * Allows a guest to cancel their own reservation, only if status is pending or confirmed
+ * (i.e. check-in has not yet started).
+ */
+exports.cancelMyReservation = catchAsync(async (req, res, next) => {
+  const guest = await resolveGuest(req.user.email);
+  if (!guest) return next(new AppError('No guest profile found for your account.', 404));
+
+  const reservation = await Reservation.findOne({
+    _id:   req.params.id,
+    guest: guest._id,
+  }).populate('room', 'roomNumber status');
+
+  if (!reservation) return next(new AppError('Reservation not found.', 404));
+
+  if (!['pending', 'confirmed'].includes(reservation.status)) {
+    return next(new AppError('Only pending or confirmed reservations can be cancelled.', 409));
+  }
+
+  reservation.status = 'cancelled';
+  await reservation.save();
+
+  // Release the room back to available if it was reserved for this booking
+  if (reservation.room && reservation.room.status === 'reserved') {
+    await Room.findByIdAndUpdate(reservation.room._id, {
+      status: 'available',
+      lastStatusChange: new Date(),
+    });
+  }
+
+  await GuestActivityLog.create({
+    guest:       guest._id,
+    reservation: reservation._id,
+    eventType:   'booking_cancelled',
+    description: `Reservation cancelled by guest via guest portal.`,
+    performedBy: 'Guest Portal',
+  });
+
+  sendSuccess(res, 200, 'Reservation cancelled successfully.', {});
+});
+
+/**
+ * GET /api/guest/history
+ * Returns the activity log for the logged-in guest (most recent first).
+ */
+exports.getMyHistory = catchAsync(async (req, res, next) => {
+  const guest = await resolveGuest(req.user.email);
+  if (!guest) {
+    return sendSuccess(res, 200, 'No history found.', { history: [] });
+  }
+
+  const logs = await GuestActivityLog.find({ guest: guest._id })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .lean();
+
+  sendSuccess(res, 200, 'Activity history retrieved.', { history: logs });
 });

@@ -291,15 +291,19 @@ function NewInvoiceModal({ onClose, onSaved }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" style={{ width: 440 }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+
+        <div className="modal-head">
           <div>
-            <div className="eyebrow" style={{ marginBottom: 4 }}>Billing</div>
-            <h2 className="display" style={{ fontSize: 28, margin: 0 }}>New invoice</h2>
+            <div className="eyebrow" style={{ marginBottom: 3 }}>Billing</div>
+            <h2 className="display" style={{ fontSize: 22, margin: 0, lineHeight: 1.1 }}>New invoice</h2>
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={onClose}><Icon name="close" size={14} /></button>
+          <button onClick={onClose} style={{ background: 'none', border: '1px solid var(--hairline)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)', flexShrink: 0 }}>
+            <Icon name="x" size={14} />
+          </button>
         </div>
 
-        <div className="field" style={{ marginBottom: 8 }}>
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="field" style={{ margin: 0 }}>
           <label>Search reservation (guest name or confirmation #)</label>
           <input
             value={resSearch}
@@ -330,18 +334,19 @@ function NewInvoiceModal({ onClose, onSaved }) {
         )}
 
         {reservationId && (
-          <div style={{ background: 'var(--linen)', padding: '10px 14px', borderRadius: 2, marginBottom: 16, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ background: 'var(--linen)', padding: '10px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <Icon name="check" size={12} />
             Reservation selected
           </div>
         )}
+        </div>{/* end modal-body */}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+        <div className="modal-foot">
+          <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
           <button className="btn btn-primary" onClick={handleCreate} disabled={saving || !reservationId}
             style={{ opacity: saving || !reservationId ? 0.6 : 1 }}>
             {saving
-              ? <><div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Generating…</>
+              ? <><div className="spinner" style={{ width: 13, height: 13, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Generating…</>
               : <><Icon name="plus" size={12} />Generate invoice</>}
           </button>
         </div>

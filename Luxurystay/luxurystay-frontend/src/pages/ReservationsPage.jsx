@@ -3,6 +3,7 @@ import api from '../lib/api';
 import { useApi } from '../hooks/useApi';
 import { useToast } from '../context/ToastContext';
 import Icon from '../components/Icon';
+import Dropdown from '../components/Dropdown';
 import Spinner from '../components/Spinner';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -318,9 +319,12 @@ function NewReservationModal({ onClose, onCreated }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div className="field">
                   <label>Source</label>
-                  <select value={source} onChange={e => setSource(e.target.value)}>
-                    {SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                  </select>
+                  <Dropdown
+                    value={source}
+                    onChange={value => setSource(value)}
+                    options={SOURCES}
+                    placeholder="Select source"
+                  />
                 </div>
                 <div className="field">
                   <label>ETA (HH:MM)</label>
@@ -522,19 +526,27 @@ function DetailRow({ label, value, mono }) {
 
 function ReservationList({ onSelect }) {
   const [statusFilter, setStatusFilter] = useState('');
-  const [sourceFilter, setSourceFilter] = useState('');
+  const [guestSearch, setGuestSearch]   = useState('');
   const [page, setPage]   = useState(1);
   const limit = 15;
 
   const params = new URLSearchParams({ page, limit, sort: 'checkIn' });
   if (statusFilter) params.set('status', statusFilter);
-  if (sourceFilter) params.set('source', sourceFilter);
+  if (guestSearch.trim()) params.set('search', guestSearch.trim());
 
   const { data, loading, refetch } = useApi(`/api/reservations?${params}`, { defaultData: { reservations: [], pagination: {} } });
   const reservations = data?.reservations || [];
   const pagination   = data?.pagination   || {};
 
-  useEffect(() => { setPage(1); }, [statusFilter, sourceFilter]);
+  useEffect(() => { setPage(1); }, [statusFilter, guestSearch]);
+
+  const normalizedSearch = guestSearch.trim().toLowerCase();
+  const visibleReservations = normalizedSearch
+    ? reservations.filter(r => {
+        const name = `${r.guest?.firstName || ''} ${r.guest?.lastName || ''}`.trim().toLowerCase();
+        return name.includes(normalizedSearch);
+      })
+    : reservations;
 
   return (
     <>
@@ -547,21 +559,20 @@ function ReservationList({ onSelect }) {
         >
           {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
-        <select
-          value={sourceFilter}
-          onChange={e => setSourceFilter(e.target.value)}
-          style={{ border: '1px solid var(--hairline)', background: 'var(--paper)', padding: '7px 12px', fontSize: 12, borderRadius: 'var(--radius)', color: 'var(--ink)', fontFamily: 'var(--sans)' }}
-        >
-          <option value="">All sources</option>
-          {SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
-        {(statusFilter || sourceFilter) && (
-          <button className="btn btn-ghost btn-sm" onClick={() => { setStatusFilter(''); setSourceFilter(''); }}>
+        <input
+          type="search"
+          value={guestSearch}
+          onChange={e => setGuestSearch(e.target.value)}
+          placeholder="Search guest name…"
+          style={{ border: '1px solid var(--hairline)', background: 'var(--paper)', padding: '7px 12px', fontSize: 12, borderRadius: 'var(--radius)', color: 'var(--ink)', fontFamily: 'var(--sans)', minWidth: 220, flex: 1 }}
+        />
+        {(statusFilter || guestSearch) && (
+          <button className="btn btn-ghost btn-sm" onClick={() => { setStatusFilter(''); setGuestSearch(''); }}>
             <Icon name="x" size={10} />Clear
           </button>
         )}
         <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--mute)' }}>
-          {pagination.total || 0} reservations
+          {visibleReservations.length} reservation{visibleReservations.length !== 1 ? 's' : ''}
         </span>
       </div>
 
@@ -583,9 +594,9 @@ function ReservationList({ onSelect }) {
                 </tr>
               </thead>
               <tbody>
-                {reservations.length === 0 ? (
+                {visibleReservations.length === 0 ? (
                   <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--mute)', padding: '32px 0' }}>No reservations found.</td></tr>
-                ) : reservations.map(r => {
+                ) : visibleReservations.map(r => {
                   const gName = r.guest ? `${r.guest.firstName} ${r.guest.lastName}` : '—';
                   const isVIP = r.guest?.isVIP;
                   return (

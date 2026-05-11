@@ -302,7 +302,7 @@ exports.getReservationById = catchAsync(async (req, res, next) => {
 
   const reservation = await Reservation.findById(req.params.id)
     .populate('guest',     'firstName lastName email phone nationality isVIP totalStays')
-    .populate('room',      'roomNumber floor type typeLabel bedType rates status view')
+    .populate('room',      'roomNumber floor type typeLabel rates status view')
     .populate('createdBy', 'name email role');
 
   if (!reservation) return next(new AppError('Reservation not found.', 404));

@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
-const Room        = require('../models/Room');
-const Reservation = require('../models/Reservation');
+const Room             = require('../models/Room');
+const Reservation      = require('../models/Reservation');
+const Guest            = require('../models/Guest');
+const GuestActivityLog = require('../models/GuestActivityLog');
 const { AppError } = require('../middleware/errorHandler');
 const catchAsync = require('../utils/catchAsync');
 const { sendSuccess } = require('../utils/apiResponse');
@@ -42,7 +44,6 @@ const buildRoomPayload = (room) => ({
   floor:            room.floor,
   type:             room.type,
   typeLabel:        room.typeLabel,
-  bedType:          room.bedType      || null,
   maxGuests:        room.maxGuests,
   rates:            room.rates,
   status:           room.status,
@@ -66,20 +67,53 @@ const buildRoomPayload = (room) => ({
  */
 exports.createRoom = catchAsync(async (req, res, next) => {
   const {
-    roomNumber, floor, type, bedType, maxGuests,
+    roomNumber, floor, type, maxGuests,
     rates, status, view, smokingAllowed,
     amenities, description, images,
   } = req.body;
 
-  const existing = await Room.findOne({ roomNumber: roomNumber.trim() });
+  const trimmedRoomNumber = roomNumber.trim();
+  const existing = await Room.findOne({ roomNumber: trimmedRoomNumber });
+
   if (existing) {
-    return next(new AppError(`Room number "${roomNumber}" already exists.`, 400));
+    if (existing.isActive) {
+      return next(new AppError(`Room number "${trimmedRoomNumber}" already exists.`, 400));
+    }
+
+    existing.floor = floor;
+    existing.type = type;
+    existing.maxGuests = maxGuests;
+    existing.rates = rates;
+    existing.status = status || existing.status;
+    existing.view = view;
+    existing.smokingAllowed = smokingAllowed;
+    existing.amenities = amenities;
+    existing.description = description;
+    existing.images = images;
+    existing.suiteType = req.body.suiteType || existing.suiteType;
+    existing.isActive = true;
+
+    await existing.save();
+
+    sendSuccess(res, 200, `Room ${existing.roomNumber} reactivated successfully.`, {
+      room: buildRoomPayload(existing),
+    });
+    return;
   }
 
   const room = await Room.create({
-    roomNumber, floor, type, bedType, maxGuests,
-    rates, status, view, smokingAllowed,
-    amenities, description, images,
+    roomNumber: trimmedRoomNumber,
+    floor,
+    type,
+    maxGuests,
+    rates,
+    status,
+    view,
+    smokingAllowed,
+    amenities,
+    description,
+    images,
+    suiteType: req.body.suiteType || null,
   });
 
   sendSuccess(res, 201, `Room ${room.roomNumber} created successfully.`, {
@@ -97,10 +131,11 @@ exports.getAllRooms = catchAsync(async (req, res) => {
   const { status, floor, type, isActive, sort } = req.query;
 
   const filter = {};
-  if (status)           filter.status   = status;
-  if (floor)            filter.floor    = Number(floor);
-  if (type)             filter.type     = type;
+  if (status)                filter.status   = status;
+  if (floor)                 filter.floor    = Number(floor);
+  if (type)                  filter.type     = type;
   if (isActive !== undefined) filter.isActive = isActive !== 'false';
+  else                        filter.isActive = true;
 
   const sortMap = {
     roomNumber: { roomNumber: 1 },
@@ -240,7 +275,7 @@ exports.updateRoom = catchAsync(async (req, res, next) => {
   validateObjectId(req.params.id, 'Room ID');
 
   const allowedFields = [
-    'floor', 'type', 'bedType', 'maxGuests', 'rates',
+    'floor', 'type', 'maxGuests', 'rates',
     'view', 'smokingAllowed', 'amenities', 'description', 'images', 'isActive',
   ];
 
@@ -285,7 +320,7 @@ exports.updateRoom = catchAsync(async (req, res, next) => {
 exports.updateRoomStatus = catchAsync(async (req, res, next) => {
   validateObjectId(req.params.id, 'Room ID');
 
-  const { status, statusNote } = req.body;
+  const { status, statusNote, guestId, checkIn, checkOut } = req.body;
   const validStatuses = ['available', 'occupied', 'cleaning', 'maintenance', 'reserved'];
 
   if (!status) {
@@ -299,10 +334,86 @@ exports.updateRoomStatus = catchAsync(async (req, res, next) => {
   if (!room) return next(new AppError('Room not found.', 404));
 
   const previousStatus = room.status;
+  const staffName      = req.user?.name || req.user?.email || 'Staff';
+
+  // Require a guest only when newly marking as occupied (not re-saving an already-occupied room)
+  if (status === 'occupied' && previousStatus !== 'occupied' && !guestId) {
+    return next(new AppError('A guest must be selected when marking a room as occupied.', 400));
+  }
+
   room.status           = status;
   room.statusNote       = statusNote || null;
   room.lastStatusChange = new Date();
   await room.save({ validateBeforeSave: true });
+
+  // When room stays occupied, update the active reservation with any new guest/date info
+  if (status === 'occupied' && previousStatus === 'occupied' && (guestId || checkIn || checkOut)) {
+    const activeRes = await Reservation.findOne({ room: room._id, status: 'checked-in' });
+    if (activeRes) {
+      if (guestId) activeRes.guest = guestId;
+      if (checkIn)  activeRes.checkInDate  = new Date(checkIn);
+      if (checkOut) {
+        activeRes.checkOutDate = new Date(checkOut);
+        const ciDate = checkIn ? new Date(checkIn) : activeRes.checkInDate;
+        activeRes.nights = Math.max(1, Math.ceil((new Date(checkOut) - ciDate) / (1000 * 60 * 60 * 24)));
+      }
+      await activeRes.save({ validateBeforeSave: false });
+    }
+  }
+
+  // When staff marks a room as occupied (new), create a walk-in checked-in reservation
+  if (status === 'occupied' && previousStatus !== 'occupied' && guestId) {
+    const guest = await Guest.findById(guestId);
+    if (!guest) return next(new AppError('Guest not found.', 404));
+
+    const checkInDate  = checkIn  ? new Date(checkIn)  : new Date();
+    const checkOutDate = checkOut ? new Date(checkOut) : new Date(Date.now() + 86400000);
+    checkInDate.setHours(0, 0, 0, 0);
+    checkOutDate.setHours(0, 0, 0, 0);
+    const nights = Math.max(1, Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24)));
+
+    const reservation = await Reservation.create({
+      guest:        guest._id,
+      room:         room._id,
+      checkInDate,
+      checkOutDate,
+      nights,
+      adults:       1,
+      status:       'checked-in',
+      source:       'direct',
+      totalAmount:  room.rates?.standard || 0,
+      depositPaid:  false,
+      createdBy:    req.user?.id,
+    });
+
+    await GuestActivityLog.create({
+      guest:       guest._id,
+      reservation: reservation._id,
+      eventType:   'checked_in',
+      description: `Walk-in check-in to Room ${room.roomNumber} recorded by ${staffName}.`,
+      performedBy: staffName,
+    });
+  }
+
+  // When staff forces an occupied room back to available, cancel the active reservation
+  if (previousStatus === 'occupied' && status === 'available') {
+    const activeReservation = await Reservation.findOne({
+      room:   room._id,
+      status: 'checked-in',
+    });
+    if (activeReservation) {
+      activeReservation.status = 'cancelled';
+      await activeReservation.save({ validateBeforeSave: false });
+
+      await GuestActivityLog.create({
+        guest:       activeReservation.guest,
+        reservation: activeReservation._id,
+        eventType:   'staff_forced_available',
+        description: `Room ${room.roomNumber} was released by staff (${statusNote || 'no reason given'}). Reservation cancelled.`,
+        performedBy: staffName,
+      });
+    }
+  }
 
   sendSuccess(res, 200, `Room ${room.roomNumber} status changed from "${previousStatus}" to "${status}".`, {
     room: buildRoomPayload(room),

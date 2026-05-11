@@ -20,6 +20,17 @@ function todayLabel() {
   return new Date().toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long' });
 }
 
+function toDateInputValue(iso) {
+  return iso ? String(iso).slice(0, 10) : '';
+}
+
+function addDaysInput(iso, days) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function Mini({ label, value }) {
@@ -105,6 +116,7 @@ function CheckInList({ list, mode, onSelect, loading }) {
               <th>Reservation</th>
               <th>Room</th>
               <th>Nights</th>
+              {isArrival && <th>Check-out</th>}
               <th>{isArrival ? 'ETA' : 'Departure'}</th>
               <th>Status</th>
               <th>Total</th>
@@ -147,6 +159,7 @@ function CheckInList({ list, mode, onSelect, loading }) {
                     <div style={{ fontSize: 10, color: 'var(--mute)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{r.room?.type?.replace('_', ' ') || ''}</div>
                   </td>
                   <td>{r.nights ?? '—'}</td>
+                  {isArrival && <td><span className="mono">{r.checkOutDate?.slice(0, 10) || '—'}</span></td>}
                   <td><span className="mono">{r.eta || r.checkOutDate?.slice(0, 10) || '—'}</span></td>
                   <td><StatusChip status={r.status} /></td>
                   <td className="numeral">{fmtCurrency(r.totalAmount)}</td>
@@ -173,13 +186,15 @@ function CheckInList({ list, mode, onSelect, loading }) {
 
 // ─── Detail Panel ─────────────────────────────────────────────────────────────
 
-function CheckInDetail({ reservation, mode, onBack, onDone }) {
+function CheckInDetail({ reservation, mode, onBack, onDone, onUpdated }) {
   const toast = useToast();
   const isArrival = mode === 'checkin';
 
   const [checklist, setChecklist] = useState({});
   const [notes, setNotes]         = useState('');
   const [loading, setLoading]     = useState(false);
+  const [checkoutSaving, setCheckoutSaving] = useState(false);
+  const [checkOutDate, setCheckOutDate] = useState(toDateInputValue(reservation.checkOutDate));
 
   const r          = reservation;
   const firstName  = r.guest?.firstName || '';
@@ -189,6 +204,10 @@ function CheckInDetail({ reservation, mode, onBack, onDone }) {
   const isVIP      = r.guest?.isVIP || r.guest?.tier === 'etoile';
   const subtotal   = r.totalAmount || 0;
   const tax        = Math.round(subtotal * 0.1);
+  const checkInDateValue = toDateInputValue(r.checkInDate);
+  const currentCheckOutDate = toDateInputValue(r.checkOutDate);
+  const minCheckOutDate = addDaysInput(r.checkInDate, 1);
+  const checkoutDateChanged = isArrival && checkOutDate !== currentCheckOutDate;
 
   const arrivalItems   = ['Down pillow', 'Espresso amenities', 'Daily Le Monde', 'Private dining', 'Sea-view side', 'No turn-down'];
   const departureItems = ['Mini-bar verified', 'Safe emptied', 'Keys returned', 'Damage assessment', 'Lost & found cleared', 'Transfer dispatched'];
@@ -209,6 +228,34 @@ function CheckInDetail({ reservation, mode, onBack, onDone }) {
       toast.error(err.response?.data?.message || 'Action failed. Please try again.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleCheckoutDateUpdate() {
+    if (!checkOutDate) {
+      toast.error('Select a check-out date.');
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(checkOutDate)) {
+      toast.error('Use YYYY-MM-DD for the check-out date.');
+      return;
+    }
+    if (checkInDateValue && new Date(checkOutDate) <= new Date(checkInDateValue)) {
+      toast.error('Check-out date must be after check-in date.');
+      return;
+    }
+    if (!checkoutDateChanged) return;
+
+    setCheckoutSaving(true);
+    try {
+      const { data } = await api.patch(`/api/reservations/${r.id}`, { checkOutDate });
+      const updated = data?.data?.reservation || data?.reservation;
+      toast.success(`Check-out date updated to ${checkOutDate}.`);
+      onUpdated(updated || { ...r, checkOutDate });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not update check-out date.');
+    } finally {
+      setCheckoutSaving(false);
     }
   }
 
@@ -255,11 +302,34 @@ function CheckInDetail({ reservation, mode, onBack, onDone }) {
                   </div>
                   <div className="field">
                     <label>Check-in date</label>
-                    <input readOnly value={r.checkInDate?.slice(0, 10) || '—'} />
+                    <input type="date" readOnly value={checkInDateValue} />
                   </div>
                   <div className="field">
                     <label>Check-out date</label>
-                    <input readOnly value={r.checkOutDate?.slice(0, 10) || '—'} />
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                      <input
+                        type="date"
+                        value={checkOutDate}
+                        min={minCheckOutDate}
+                        onChange={e => setCheckOutDate(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={handleCheckoutDateUpdate}
+                        disabled={checkoutSaving || !checkoutDateChanged}
+                        style={{ whiteSpace: 'nowrap', opacity: checkoutSaving || !checkoutDateChanged ? 0.6 : 1 }}
+                      >
+                        {checkoutSaving
+                          ? <><div className="spinner" style={{ width: 12, height: 12, borderWidth: 1.5 }} />Saving…</>
+                          : <><Icon name="calendar" size={12} />Update</>}
+                      </button>
+                    </div>
+                    {checkoutDateChanged && (
+                      <div style={{ fontSize: 11, color: 'var(--mute)', marginTop: 6 }}>
+                        Save the new date before issuing keys.
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -315,8 +385,8 @@ function CheckInDetail({ reservation, mode, onBack, onDone }) {
                 <Icon name="arrow_left" size={12} />Cancel
               </button>
               {canAct && (
-                <button className="btn btn-primary" onClick={handleAction} disabled={loading}
-                  style={{ opacity: loading ? 0.7 : 1 }}>
+                <button className="btn btn-primary" onClick={handleAction} disabled={loading || checkoutDateChanged}
+                  style={{ opacity: loading || checkoutDateChanged ? 0.7 : 1 }}>
                   {loading
                     ? <><div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Processing…</>
                     : <>{isArrival ? 'Issue keys · Check in' : 'Settle folio · Check out'}<Icon name="arrow_right" size={12} /></>
@@ -335,8 +405,8 @@ function CheckInDetail({ reservation, mode, onBack, onDone }) {
             </div>
             <SummaryRow label="Confirmation" value={r.bookingId || '—'} />
             <SummaryRow label="Room" value={r.room ? `${r.room.roomNumber} · ${r.room.type?.replace('_', ' ')}` : '—'} />
-            <SummaryRow label="Check-in"  value={r.checkInDate?.slice(0, 10)  || '—'} />
-            <SummaryRow label="Check-out" value={r.checkOutDate?.slice(0, 10) || '—'} />
+            <SummaryRow label="Check-in"  value={checkInDateValue || '—'} />
+            <SummaryRow label="Check-out" value={isArrival ? (checkOutDate || '—') : (currentCheckOutDate || '—')} />
             <SummaryRow label="Nights"    value={r.nights ?? '—'} />
             <SummaryRow label="Adults"    value={r.adults ?? '—'} />
             <SummaryRow label="Subtotal"  value={fmtCurrency(subtotal)} />
@@ -379,6 +449,10 @@ export default function CheckInPage() {
 
   function switchTab(t) { setTab(t); setSelected(null); }
   function handleDone()  { setSelected(null); setRefreshKey(k => k + 1); }
+  function handleUpdated(reservation) {
+    setSelected(reservation);
+    setRefreshKey(k => k + 1);
+  }
 
   return (
     <div>
@@ -408,6 +482,7 @@ export default function CheckInPage() {
           mode={tab}
           onBack={() => setSelected(null)}
           onDone={handleDone}
+          onUpdated={handleUpdated}
         />
       ) : (
         <CheckInList
