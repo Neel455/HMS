@@ -32,7 +32,7 @@ export default function LandingPage() {
     <PublicShell>
 
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
-      <section style={{ position: 'relative', overflow: 'hidden', background: 'var(--ivory)' }}>
+      <section style={{ position: 'relative', overflowX: 'clip', background: 'var(--ivory)' }}>
 
         {/* watermark numeral */}
         <div aria-hidden style={{
@@ -59,8 +59,8 @@ export default function LandingPage() {
 
           {/* LEFT — typography */}
           <div style={{
-            padding: '84px 56px 84px 88px',
-            display: 'flex', flexDirection: 'column', justifyContent: 'center',
+            padding: '84px 56px 80px 88px',
+            display: 'flex', flexDirection: 'column', justifyContent: 'flex-start',
             position: 'relative', zIndex: 2,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 36 }}>
@@ -112,7 +112,7 @@ export default function LandingPage() {
             {/* stats grid */}
             <div style={{
               display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 24,
-              marginTop: 64, paddingTop: 32, borderTop: '1px solid var(--hairline)',
+              marginTop: 40, paddingTop: 24, borderTop: '1px solid var(--hairline)',
             }}>
               {[
                 { n: '★★', l: 'Michelin',  s: 'Le Jardin · 2024' },
