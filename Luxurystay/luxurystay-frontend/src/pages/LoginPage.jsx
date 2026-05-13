@@ -22,25 +22,25 @@ const ROLE_LABELS = {
 };
 
 export default function LoginPage() {
-  const [tab, setTab]         = useState('signin');
+  const [tab, setTab] = useState('signin');
 
   // Sign-in state
-  const [email, setEmail]           = useState('');
-  const [password, setPassword]     = useState('');
-  const [showPwd, setShowPwd]       = useState(false);
-  const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState('');
+  const [email, setEmail]                   = useState('');
+  const [password, setPassword]             = useState('');
+  const [showPwd, setShowPwd]               = useState(false);
+  const [loading, setLoading]               = useState(false);
+  const [error, setError]                   = useState('');
   const [loginFieldErrors, setLoginFieldErrors] = useState({});
 
   // Registration state
-  const [regName, setRegName]           = useState('');
-  const [regEmail, setRegEmail]         = useState('');
-  const [regPhone, setRegPhone]         = useState('');
-  const [regPassword, setRegPassword]   = useState('');
-  const [regConfirm, setRegConfirm]     = useState('');
-  const [showRegPwd, setShowRegPwd]     = useState(false);
-  const [regLoading, setRegLoading]     = useState(false);
-  const [regError, setRegError]         = useState('');
+  const [regName, setRegName]               = useState('');
+  const [regEmail, setRegEmail]             = useState('');
+  const [regPhone, setRegPhone]             = useState('');
+  const [regPassword, setRegPassword]       = useState('');
+  const [regConfirm, setRegConfirm]         = useState('');
+  const [showRegPwd, setShowRegPwd]         = useState(false);
+  const [regLoading, setRegLoading]         = useState(false);
+  const [regError, setRegError]             = useState('');
   const [regFieldErrors, setRegFieldErrors] = useState({});
 
   const { login, isAuthenticated, user } = useAuth();
@@ -82,8 +82,8 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, user, navigate, from]);
 
-  // Derive recognised staff identity from email for the resolver strip
-  const staffDomain = email.trim().toLowerCase().endsWith('@luxurystay.co');
+  // Identity resolver from email domain
+  const staffDomain  = email.trim().toLowerCase().endsWith('@luxurystay.co');
   const resolvedRole = staffDomain ? 'staff' : null;
 
   async function handleSubmit(e) {
@@ -91,9 +91,8 @@ export default function LoginPage() {
     setError('');
     setLoginFieldErrors({});
 
-    // Client-side validation
     const clientErrors = {};
-    if (!email.trim()) clientErrors.email = 'Email is required.';
+    if (!email.trim())    clientErrors.email    = 'Email is required.';
     if (!password.trim()) clientErrors.password = 'Password is required.';
     if (Object.keys(clientErrors).length > 0) {
       setLoginFieldErrors(clientErrors);
@@ -128,12 +127,11 @@ export default function LoginPage() {
     setRegError('');
     setRegFieldErrors({});
 
-    // Client-side validation
     const clientErrors = {};
-    if (!regName.trim()) clientErrors.name = 'Name is required.';
+    if (!regName.trim())   clientErrors.name = 'Name is required.';
     else if (regName.trim().length < 2) clientErrors.name = 'Name must be at least 2 characters.';
-    if (!regEmail.trim()) clientErrors.email = 'Email is required.';
-    if (!regPassword) clientErrors.password = 'Password is required.';
+    if (!regEmail.trim())  clientErrors.email = 'Email is required.';
+    if (!regPassword)      clientErrors.password = 'Password is required.';
     else if (regPassword.length < 8) clientErrors.password = 'Password must be at least 8 characters.';
     else if (!PASSWORD_REGEX.test(regPassword)) clientErrors.password = 'Password must contain at least one uppercase letter, one lowercase letter, and one number.';
     if (!regConfirm) clientErrors.confirmPassword = 'Please confirm your password.';
@@ -147,10 +145,10 @@ export default function LoginPage() {
     setRegLoading(true);
     try {
       const { data } = await api.post('/api/auth/register', {
-        name: regName.trim(),
-        email: regEmail.trim(),
+        name:     regName.trim(),
+        email:    regEmail.trim(),
         password: regPassword,
-        phone: regPhone.trim() || undefined,
+        phone:    regPhone.trim() || undefined,
       });
       const { token, user: newUser } = data.data;
       localStorage.setItem('ls_token', token);
@@ -160,7 +158,6 @@ export default function LoginPage() {
     } catch (err) {
       const serverErrors = err.response?.data?.errors;
       if (serverErrors?.length) {
-        // Map server field errors to a { fieldName: message } object
         const fieldMap = {};
         serverErrors.forEach(e => { fieldMap[e.field] = e.message; });
         setRegFieldErrors(fieldMap);
@@ -183,15 +180,15 @@ export default function LoginPage() {
     <div style={{
       minHeight: '100vh',
       display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
+      gridTemplateColumns: '1.1fr 1fr',
       background: 'var(--ivory)',
     }}>
 
-      {/* ── Left panel ─────────────────────────────────────────────── */}
+      {/* ── Left dark panel ──────────────────────────────────────────── */}
       <div style={{
         background: 'linear-gradient(160deg, #2A2620 0%, #1A1814 100%)',
         color: 'var(--ivory)',
-        padding: 64,
+        padding: '56px 56px 56px 64px',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
@@ -201,64 +198,91 @@ export default function LoginPage() {
         {/* Brass radial glow */}
         <div style={{
           position: 'absolute', inset: 0,
-          background: 'radial-gradient(circle at 70% 20%, rgba(160, 128, 84, 0.18), transparent 60%)',
+          background: 'radial-gradient(circle at 70% 25%, rgba(160, 128, 84, 0.22), transparent 55%)',
           pointerEvents: 'none',
         }} />
+
+        {/* Watermark ★ */}
+        <div style={{
+          position: 'absolute',
+          top: 40, right: 56,
+          fontFamily: 'var(--serif)',
+          fontSize: 300,
+          fontStyle: 'italic',
+          color: 'rgba(160, 128, 84, 0.08)',
+          lineHeight: 0.8,
+          pointerEvents: 'none',
+          userSelect: 'none',
+        }}>★</div>
 
         {/* Brand */}
         <div style={{ position: 'relative' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-            <span style={{ fontFamily: 'var(--serif)', fontSize: 28, fontStyle: 'italic' }}>Luxury</span>
-            <span style={{ fontFamily: 'var(--serif)', fontSize: 28, letterSpacing: '0.04em' }}>STAY</span>
+            <span style={{ fontFamily: 'var(--serif)', fontSize: 30, fontStyle: 'italic' }}>Luxury</span>
+            <span style={{ fontFamily: 'var(--serif)', fontSize: 30, letterSpacing: '0.04em' }}>STAY</span>
           </div>
-          <div style={{ fontSize: 10, letterSpacing: '0.32em', textTransform: 'uppercase', color: 'var(--brass-soft)', marginTop: 10 }}>
-            One door, every guest
+          <div style={{ fontSize: 12, letterSpacing: '0.26em', textTransform: 'uppercase', color: 'var(--brass-soft)', marginTop: 10, fontWeight: 600 }}>
+            One door · every guest
           </div>
         </div>
 
         {/* Quote */}
         <div style={{ position: 'relative' }}>
-          <div className="display display-italic" style={{ fontSize: 56, lineHeight: 1.05, maxWidth: 480, color: 'var(--ivory)' }}>
+          <div style={{ width: 60, height: 1, background: 'var(--brass)', marginBottom: 28 }} />
+          <div className="display display-italic" style={{
+            fontSize: 64, lineHeight: 1.02,
+            maxWidth: 560, color: 'var(--ivory)',
+            letterSpacing: '-0.01em',
+          }}>
             "Service is the architecture of memory."
           </div>
-          <div style={{ marginTop: 24, fontSize: 11, letterSpacing: '0.24em', textTransform: 'uppercase', color: 'var(--brass-soft)' }}>
-            — House motto · est. 1924
+          <div style={{ marginTop: 28, fontSize: 12, letterSpacing: '0.20em', textTransform: 'uppercase', color: 'var(--brass-soft)', fontWeight: 600 }}>
+            — House motto · MCMXXIV
           </div>
         </div>
 
-        <div style={{ position: 'relative', fontSize: 11, color: 'var(--mute-2)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-          Maison Étoile · Côte d'Azur
+        {/* Footer line */}
+        <div style={{
+          position: 'relative',
+          display: 'flex', justifyContent: 'space-between',
+          fontSize: 12, color: 'var(--mute-2)',
+          letterSpacing: '0.14em', textTransform: 'uppercase', fontWeight: 500,
+        }}>
+          <span>Maison Étoile · Côte d'Azur</span>
+          <span>Vol. CII · MMXXVI</span>
         </div>
       </div>
 
-      {/* ── Right panel ────────────────────────────────────────────── */}
-      <div style={{ padding: 64, display: 'flex', flexDirection: 'column', justifyContent: 'center', overflowY: 'auto' }}>
-        <div style={{ maxWidth: 440, margin: '0 auto', width: '100%' }}>
+      {/* ── Right light panel ────────────────────────────────────────── */}
+      <div style={{ padding: 56, display: 'flex', flexDirection: 'column', justifyContent: 'center', overflowY: 'auto' }}>
+        <div style={{ maxWidth: 460, margin: '0 auto', width: '100%' }}>
 
           <div className="eyebrow" style={{ marginBottom: 14 }}>
-            {tab === 'signup' ? 'Guest account' : 'Welcome back'}
+            {tab === 'signup' ? 'Create your account' : 'Welcome back'}
           </div>
-          <h1 className="display" style={{ fontSize: 52, margin: '0 0 12px' }}>
-            {tab === 'signup' ? <>Create <em>account.</em></> : <>Sign <em>in.</em></>}
+          <h1 className="display" style={{ fontSize: 60, margin: '0 0 12px', lineHeight: 1 }}>
+            {tab === 'signup' ? <>Begin your <em>residency.</em></> : <>Sign <em>in.</em></>}
           </h1>
-          <p style={{ color: 'var(--ink-3)', marginBottom: 28, fontSize: 14, lineHeight: 1.6 }}>
-            {tab === 'signup'
-              ? 'Register as a guest to view your reservations and share your experience.'
-              : 'Sign in to your LuxuryStay account.'}
+          <p style={{ color: 'var(--ink-3)', marginBottom: 28, fontSize: 14, lineHeight: 1.6, fontFamily: 'var(--serif)', fontStyle: 'italic' }}>
+            One sign-in for guests and staff alike. We'll route you to the right place.
           </p>
 
-          {/* Tab switcher */}
-          <div style={{ display: 'flex', border: '1px solid var(--hairline)', marginBottom: 28, borderRadius: 2, overflow: 'hidden' }}>
-            {[{ id: 'signin', label: 'Sign in' }, { id: 'signup', label: 'New account' }].map(t => (
+          {/* Tab switcher — underline style */}
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--hairline)', marginBottom: 28 }}>
+            {[{ id: 'signin', label: 'Sign in' }, { id: 'signup', label: 'Create account' }].map(t => (
               <button
                 key={t.id}
                 onClick={() => { setTab(t.id); setError(''); setLoginFieldErrors({}); setRegError(''); setRegFieldErrors({}); }}
                 style={{
-                  flex: 1, padding: '12px 16px',
+                  flex: 1, padding: '14px 16px',
                   fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase',
-                  background: tab === t.id ? 'var(--ink)' : 'transparent',
-                  color: tab === t.id ? 'var(--paper)' : 'var(--mute)',
-                  border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+                  background: 'transparent',
+                  color: tab === t.id ? 'var(--ink)' : 'var(--mute)',
+                  border: 'none',
+                  borderBottom: tab === t.id ? '2px solid var(--ink)' : '2px solid transparent',
+                  marginBottom: -1,
+                  cursor: 'pointer',
+                  fontWeight: tab === t.id ? 600 : 400,
                 }}
               >{t.label}</button>
             ))}
@@ -317,24 +341,25 @@ export default function LoginPage() {
               {resolvedRole && email && (
                 <div style={{
                   background: 'var(--linen)', border: '1px solid var(--hairline)',
-                  padding: '10px 14px', marginBottom: 18,
+                  padding: '12px 16px', marginBottom: 20,
                   fontSize: 12, color: 'var(--ink-3)',
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  borderRadius: 'var(--radius)',
+                  display: 'flex', alignItems: 'center', gap: 12,
                 }}>
-                  <Icon name="key" size={12} />
-                  <span>LuxuryStay staff address recognised</span>
+                  <Icon name="key" size={14} style={{ color: 'var(--brass-deep)' }} />
+                  <span style={{ fontFamily: 'var(--serif)' }}>
+                    LuxuryStay staff address recognised · routing to{' '}
+                    <strong style={{ fontWeight: 600, fontStyle: 'italic' }}>staff console</strong>
+                  </span>
                 </div>
               )}
 
-              {/* General error (wrong credentials etc.) */}
+              {/* General error */}
               {error && (
                 <div style={{
                   background: 'var(--terracotta-soft)', border: '1px solid var(--terracotta)',
                   padding: '10px 14px', marginBottom: 18,
                   fontSize: 12, color: 'var(--terracotta)',
                   display: 'flex', alignItems: 'center', gap: 10,
-                  borderRadius: 'var(--radius)',
                 }}>
                   <Icon name="alert" size={12} />
                   <span>{error}</span>
@@ -345,11 +370,11 @@ export default function LoginPage() {
                 type="submit"
                 className="btn btn-primary"
                 disabled={loading}
-                style={{ width: '100%', padding: '14px', justifyContent: 'center', opacity: loading ? 0.7 : 1 }}
+                style={{ width: '100%', padding: 16, justifyContent: 'center', opacity: loading ? 0.6 : 1 }}
               >
                 {loading
                   ? <><div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} /> Signing in…</>
-                  : <>{resolvedRole ? `Sign in to ${ROLE_LABELS[resolvedRole] || 'console'}` : 'Sign in'} <Icon name="arrow_right" size={12} /></>
+                  : <>{resolvedRole ? `Sign in to ${ROLE_LABELS.staff || 'console'}` : 'Sign in to My Stay'} <Icon name="arrow_right" size={12} /></>
                 }
               </button>
             </form>
@@ -457,7 +482,6 @@ export default function LoginPage() {
                   padding: '10px 14px', marginBottom: 14,
                   fontSize: 12, color: 'var(--terracotta)',
                   display: 'flex', alignItems: 'center', gap: 10,
-                  borderRadius: 'var(--radius)',
                 }}>
                   <Icon name="alert" size={12} />
                   <span>{regError}</span>
@@ -468,11 +492,11 @@ export default function LoginPage() {
                 type="submit"
                 className="btn btn-primary"
                 disabled={regLoading}
-                style={{ width: '100%', padding: '14px', justifyContent: 'center', opacity: regLoading ? 0.7 : 1 }}
+                style={{ width: '100%', padding: 16, justifyContent: 'center', opacity: regLoading ? 0.7 : 1 }}
               >
                 {regLoading
                   ? <><div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} /> Creating account…</>
-                  : <>Create guest account <Icon name="arrow_right" size={12} /></>
+                  : <>Create account <Icon name="arrow_right" size={12} /></>
                 }
               </button>
 
@@ -496,6 +520,12 @@ export default function LoginPage() {
                 {acc.label}
               </button>
             ))}
+          </div>
+
+          <div style={{ marginTop: 24, fontSize: 11, color: 'var(--mute)', textAlign: 'center' }}>
+            <a href="/" style={{ color: 'var(--brass-deep)', borderBottom: '1px solid var(--brass-deep)', cursor: 'pointer', textDecoration: 'none' }}>
+              ← Back to the public site
+            </a>
           </div>
 
         </div>

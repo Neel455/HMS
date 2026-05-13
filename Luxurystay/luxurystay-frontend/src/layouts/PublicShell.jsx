@@ -101,6 +101,25 @@ export default function PublicShell({ children, dark = false }) {
   return (
     <div style={{ background: bg, minHeight: '100vh', color: fg }}>
 
+      {/* ── Announcement bar ────────────────────────────────────────── */}
+      <div style={{
+        background: 'var(--ink)', color: 'var(--brass-soft)',
+        padding: '8px 32px',
+        fontSize: 10, letterSpacing: '0.24em', textTransform: 'uppercase',
+        display: 'flex', justifyContent: 'space-between', gap: 16,
+        whiteSpace: 'nowrap', overflow: 'hidden',
+      }}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          ★ Member of Leading Hotels of the World
+        </span>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--mute-2)' }}>
+          EN · FR · IT · 中文 · 日本語
+        </span>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          +33 4 93 88 14 24
+        </span>
+      </div>
+
       {/* ── Sticky header ───────────────────────────────────────────── */}
       <header style={{
         display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center',

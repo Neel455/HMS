@@ -1,167 +1,414 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import PublicShell from '../../layouts/PublicShell';
 import Icon from '../../components/Icon';
-import Dropdown from '../../components/Dropdown';
+import Photo from '../../components/Photo';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 
-// Fallback gradients — used when a suite has no image and no gradient stored
-const FALLBACK_GRAD = {
-  deluxe_twin:   'linear-gradient(140deg, #EFE8DB, #C9AE82)',
-  deluxe_king:   'linear-gradient(140deg, #C9AE82, #A08054)',
-  junior_suite:  'linear-gradient(140deg, #A08054, #806339)',
-  premier_suite: 'linear-gradient(140deg, #806339, #4A443B)',
-  penthouse:     'linear-gradient(140deg, #4A443B, #1A1814)',
+// Suite name / slug → Photo tone
+const NAME_TONES = {
+  'Deluxe Twin':   'ivory',
+  'Deluxe King':   'warm',
+  'Junior Suite':  'sand',
+  'Premier Suite': 'deep',
+  'Penthouse':     'night',
+};
+const SLUG_TONES = {
+  deluxe_twin:   'ivory',
+  deluxe_king:   'warm',
+  junior_suite:  'sand',
+  premier_suite: 'deep',
+  penthouse:     'night',
 };
 
-// Maps suite display-name → slug so StepConfirm can look up the gradient
-const SUITE_NAME_TO_SLUG = {
-  'Deluxe Twin':   'deluxe_twin',
-  'Deluxe King':   'deluxe_king',
-  'Junior Suite':  'junior_suite',
-  'Premier Suite': 'premier_suite',
-  'Penthouse':     'penthouse',
-};
+const WEEKDAYS    = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const MONTHS      = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const ROMAN_YEARS = { 2025:'MMXXV', 2026:'MMXXVI', 2027:'MMXXVII', 2028:'MMXXVIII' };
 
-// ─── Step indicator ───────────────────────────────────────────────────────────
+function toISO(year, month, day) {
+  return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+}
 
-function BookStep({ n, label, done, current }) {
+const STEP_TITLES = [
+  {
+    eyebrow: 'Step I · When',
+    h: <>Choose <em>your dates.</em></>,
+    sub: 'Three nights or more receive a complimentary spa ritual on arrival, and a chilled bottle of Ruinart in your suite.',
+  },
+  {
+    eyebrow: 'Step II · Where',
+    h: <>Choose <em>your suite.</em></>,
+    sub: 'Forty-two suites, each composed by hand. Floating tags indicate size and view.',
+  },
+  {
+    eyebrow: 'Step III · Who',
+    h: <>Tell us <em>about yourself.</em></>,
+    sub: 'A few small marks of the occasion — anything you tell us is held in confidence and pinned to your folio.',
+  },
+  {
+    eyebrow: 'Step IV · Confirm',
+    h: <>Review <em>&amp; reserve.</em></>,
+    sub: 'A 30% deposit secures the booking. The balance is settled on departure, with no surprises.',
+  },
+];
+
+const CTA_LABELS  = ['Choose suite', 'Continue to guest', 'Continue to review', 'Reserve & pay deposit'];
+const BACK_LABELS = ['Dates', 'Suite', 'Guest'];
+
+// ─── Step Indicator ──────────────────────────────────────────────────────────
+
+function StepIndicator({ step }) {
+  const steps = [
+    { n: 'I',   l: 'Dates'   },
+    { n: 'II',  l: 'Suite'   },
+    { n: 'III', l: 'Guest'   },
+    { n: 'IV',  l: 'Confirm' },
+  ];
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <div style={{
-        width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-        background: done ? 'var(--ink)' : current ? 'var(--brass)' : 'transparent',
-        border: done || current ? 'none' : '1px solid var(--hairline)',
-        color: done || current ? 'var(--paper)' : 'var(--mute)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontFamily: 'var(--serif)', fontSize: 13,
-      }}>
-        {done ? <Icon name="check" size={12} /> : n}
-      </div>
-      <span style={{
-        fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase',
-        color: current ? 'var(--ink)' : 'var(--mute)',
-        fontWeight: current ? 600 : 400,
-      }}>
-        {label}
-      </span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 36 }}>
+      {steps.map((s, i) => {
+        const done    = i < step;
+        const current = i === step;
+        return (
+          <Fragment key={i}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                background: done ? 'var(--ink)' : current ? 'var(--brass)' : 'transparent',
+                border: done || current ? 'none' : '1px solid var(--hairline)',
+                color: done || current ? 'var(--paper)' : 'var(--mute)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'var(--serif)', fontSize: 14, fontStyle: 'italic',
+              }}>
+                {done ? <Icon name="check" size={12} /> : s.n}
+              </div>
+              <span style={{
+                fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase',
+                color: current ? 'var(--ink)' : done ? 'var(--ink-3)' : 'var(--mute)',
+                fontWeight: current ? 700 : 500,
+              }}>
+                {s.l}
+              </span>
+            </div>
+            {i < steps.length - 1 && (
+              <div style={{
+                flex: 1, height: 1, maxWidth: 80,
+                background: done ? 'var(--ink)' : 'var(--hairline)',
+              }} />
+            )}
+          </Fragment>
+        );
+      })}
     </div>
   );
 }
 
-function StepLine() {
-  return <div style={{ flex: 1, height: 1, background: 'var(--hairline)' }} />;
+// ─── Folio Rail ──────────────────────────────────────────────────────────────
+
+function FolioRail({ suite, nights, subtotal, tax, total, cancelBy, onContinue, ctaLabel, canContinue }) {
+  const spaFree = nights >= 3;
+  return (
+    <div style={{ position: 'sticky', top: 110, alignSelf: 'start' }}>
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        {suite && (
+          <Photo
+            tone={suite.tone || 'warm'}
+            ratio="16/10"
+            label={suite.name}
+            sub="Your selection"
+          />
+        )}
+        <div style={{ padding: 28 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 18 }}>
+            <div className="eyebrow">Folio summary</div>
+            <div className="eyebrow" style={{ color: 'var(--brass-deep)' }}>Réservation</div>
+          </div>
+
+          {suite && subtotal > 0 ? (
+            <>
+              {[
+                { l: `${nights} night${nights !== 1 ? 's' : ''} · ${suite.name}`, v: `€${subtotal.toLocaleString()}` },
+                { l: 'Spa ritual (gift)',  v: spaFree ? '—' : `€${Math.round((suite.rate || 0) * 0.15)}` },
+                { l: 'Tourist tax',        v: '€20' },
+                { l: 'VAT (10%)',          v: `€${tax.toLocaleString()}` },
+              ].map((r, i, arr) => (
+                <div key={i} style={{
+                  display: 'flex', justifyContent: 'space-between',
+                  padding: '10px 0', fontSize: 13,
+                  borderBottom: i < arr.length - 1 ? '1px dotted var(--hairline)' : 'none',
+                }}>
+                  <span style={{ color: 'var(--mute)' }}>{r.l}</span>
+                  <span style={{ fontWeight: 500 }}>{r.v}</span>
+                </div>
+              ))}
+              <div style={{
+                borderTop: '1px solid var(--ink)', marginTop: 14, paddingTop: 14,
+                display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+              }}>
+                <span className="eyebrow">Total</span>
+                <span className="display numeral" style={{ fontSize: 36, fontStyle: 'italic' }}>
+                  €{total.toLocaleString()}
+                </span>
+              </div>
+            </>
+          ) : (
+            <p style={{
+              fontSize: 15, color: 'var(--mute)',
+              fontStyle: 'italic', fontFamily: 'var(--serif)',
+              margin: 0, padding: '20px 0', fontWeight: 550,
+            }}>
+              Choose your dates and suite to see a folio summary.
+            </p>
+          )}
+
+          <button
+            className="btn btn-primary"
+            disabled={!canContinue}
+            style={{
+              width: '100%', justifyContent: 'center',
+              padding: 16, marginTop: 20,
+              opacity: canContinue ? 1 : 0.5,
+            }}
+            onClick={onContinue}
+          >
+            {ctaLabel} <Icon name="arrow_right" size={12} />
+          </button>
+
+          <div style={{ marginTop: 14, fontSize: 12, color: 'var(--mute)', textAlign: 'center', lineHeight: 1.6, fontWeight: 500 }}>
+            <span style={{ color: 'var(--brass-deep)' }}>★</span>
+            {cancelBy
+              ? ` Free cancellation through ${cancelBy} · Pay 30% deposit now`
+              : ' Free cancellation · Pay 30% deposit now'
+            }
+          </div>
+        </div>
+      </div>
+
+      {/* Concierge card */}
+      <div style={{
+        marginTop: 16, padding: '16px 20px',
+        background: 'var(--linen)', border: '1px solid var(--hairline)',
+        display: 'flex', gap: 14, alignItems: 'center',
+      }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+          background: 'var(--brass)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'var(--paper)',
+        }}>
+          <Icon name="phone" size={14} />
+        </div>
+        <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+          <div style={{ fontWeight: 600 }}>Speak with a concierge</div>
+          <div style={{ color: 'var(--mute)', fontWeight: 500 }}>+33 4 93 88 14 24 · 24h</div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-// ─── Step 1 — Dates ───────────────────────────────────────────────────────────
+// ─── Stepper ─────────────────────────────────────────────────────────────────
 
-function StepDates({ data, onChange, onNext }) {
-  const [errors, setErrors] = useState({});
+function Stepper({ label, value, onChange, min, max }) {
+  return (
+    <div>
+      <div className="label" style={{ marginBottom: 8 }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'center', border: '1px solid var(--hairline)', padding: 4 }}>
+        <button
+          className="btn btn-ghost btn-sm"
+          disabled={value <= min}
+          onClick={() => onChange(value - 1)}
+          style={{ minWidth: 32, padding: '8px 0' }}
+        >−</button>
+        <div style={{
+          flex: 1, textAlign: 'center',
+          fontFamily: 'var(--serif)', fontSize: 22, fontStyle: 'italic',
+        }}>
+          {value}
+        </div>
+        <button
+          className="btn btn-ghost btn-sm"
+          disabled={value >= max}
+          onClick={() => onChange(value + 1)}
+          style={{ minWidth: 32, padding: '8px 0' }}
+        >+</button>
+      </div>
+    </div>
+  );
+}
 
-  function validate() {
-    const e = {};
-    if (!data.checkIn)   e.checkIn  = 'Please select an arrival date.';
-    if (!data.checkOut)  e.checkOut = 'Please select a departure date.';
-    if (data.checkIn && data.checkOut && data.checkIn >= data.checkOut)
-      e.checkOut = 'Departure must be after arrival.';
-    setErrors(e);
-    return !Object.keys(e).length;
+// ─── Step 1 — Dates ──────────────────────────────────────────────────────────
+
+function StepDates({ dates, onDateChange }) {
+  const today = new Date();
+  const [calYear,  setCalYear]  = useState(today.getFullYear());
+  const [calMonth, setCalMonth] = useState(today.getMonth() + 1);
+
+  function handleDayClick(day) {
+    const iso = toISO(calYear, calMonth, day);
+    if (!dates.checkIn || (dates.checkIn && dates.checkOut)) {
+      onDateChange('checkIn',  iso);
+      onDateChange('checkOut', '');
+    } else {
+      if (iso > dates.checkIn) {
+        onDateChange('checkOut', iso);
+      } else {
+        onDateChange('checkIn',  iso);
+        onDateChange('checkOut', '');
+      }
+    }
   }
 
-  const nights = data.checkIn && data.checkOut
-    ? Math.ceil((new Date(data.checkOut) - new Date(data.checkIn)) / 86400000)
-    : 0;
+  function prevMonth() {
+    if (calMonth === 1) { setCalYear(y => y - 1); setCalMonth(12); }
+    else setCalMonth(m => m - 1);
+  }
+  function nextMonth() {
+    if (calMonth === 12) { setCalYear(y => y + 1); setCalMonth(1); }
+    else setCalMonth(m => m + 1);
+  }
 
-  // Min date = today
-  const today = new Date().toISOString().slice(0, 10);
+  const daysInMonth   = new Date(calYear, calMonth, 0).getDate();
+  const firstDayOfWk  = (new Date(calYear, calMonth - 1, 1).getDay() + 6) % 7;
+  const cells = [
+    ...Array(firstDayOfWk).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const todayISO = toISO(today.getFullYear(), today.getMonth() + 1, today.getDate());
+  const dayISO   = (d) => toISO(calYear, calMonth, d);
+
+  const nights = dates.checkIn && dates.checkOut
+    ? Math.ceil((new Date(dates.checkOut) - new Date(dates.checkIn)) / 86400000) : 0;
+
+  function fmtDisplay(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso + 'T00:00:00');
+    return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+
+  const monthLabel = `${MONTHS[calMonth - 1]} ${ROMAN_YEARS[calYear] || calYear}`;
 
   return (
-    <div style={{ maxWidth: 600 }}>
-      <h2 className="display" style={{ fontSize: 40, margin: '0 0 8px' }}>
-        Choose your <em>dates.</em>
-      </h2>
-      <p style={{ fontSize: 14, color: 'var(--ink-3)', marginBottom: 32 }}>
-        Stays of three nights or more receive a complimentary spa ritual on arrival.
-      </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
-        <div className="field">
-          <label>Arrival date</label>
-          <input
-            type="date"
-            min={today}
-            value={data.checkIn}
-            onChange={e => { onChange('checkIn', e.target.value); setErrors(v => ({ ...v, checkIn: '' })); }}
-            style={errors.checkIn ? { borderColor: 'var(--terracotta)' } : {}}
-          />
-          {errors.checkIn && <p style={{ color: 'var(--terracotta)', fontSize: 12, marginTop: 4 }}>{errors.checkIn}</p>}
+      {/* Date summary + calendar */}
+      <div className="card" style={{ padding: 32 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 24, flexWrap: 'wrap', gap: 16 }}>
+          <div>
+            <div className="eyebrow" style={{ marginBottom: 6 }}>Arrival → Departure</div>
+            <div className="display" style={{ fontSize: 26, fontStyle: 'italic', lineHeight: 1 }}>
+              {fmtDisplay(dates.checkIn)} → {fmtDisplay(dates.checkOut)}
+            </div>
+          </div>
+          {nights > 0 && (
+            <div style={{ textAlign: 'right' }}>
+              <div className="eyebrow" style={{ marginBottom: 6 }}>Length of stay</div>
+              <div className="display numeral" style={{ fontSize: 26, fontStyle: 'italic', lineHeight: 1 }}>
+                {nights} night{nights !== 1 ? 's' : ''}
+              </div>
+            </div>
+          )}
         </div>
-        <div className="field">
-          <label>Departure date</label>
-          <input
-            type="date"
-            min={data.checkIn || today}
-            value={data.checkOut}
-            onChange={e => { onChange('checkOut', e.target.value); setErrors(v => ({ ...v, checkOut: '' })); }}
-            style={errors.checkOut ? { borderColor: 'var(--terracotta)' } : {}}
-          />
-          {errors.checkOut && <p style={{ color: 'var(--terracotta)', fontSize: 12, marginTop: 4 }}>{errors.checkOut}</p>}
+
+        <div style={{ borderTop: '1px solid var(--hairline)', paddingTop: 24 }}>
+          {/* Month nav */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <button className="btn btn-ghost btn-sm" onClick={prevMonth}>
+              <Icon name="arrow_left" size={10} />
+            </button>
+            <div className="display" style={{ fontSize: 20, fontStyle: 'italic' }}>{monthLabel}</div>
+            <button className="btn btn-ghost btn-sm" onClick={nextMonth}>
+              <Icon name="arrow_right" size={10} />
+            </button>
+          </div>
+
+          {/* Calendar grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+            {WEEKDAYS.map(d => (
+              <div key={d} style={{
+                textAlign: 'center', fontSize: 11, color: 'var(--mute)',
+                letterSpacing: '0.14em', textTransform: 'uppercase', paddingBottom: 6, fontWeight: 600,
+              }}>{d}</div>
+            ))}
+            {cells.map((day, i) => {
+              if (!day) return <div key={i} />;
+              const iso     = dayISO(day);
+              const isCI    = dates.checkIn  === iso;
+              const isCO    = dates.checkOut === iso;
+              const isEdge  = isCI || isCO;
+              const inRange = dates.checkIn && dates.checkOut && iso > dates.checkIn && iso < dates.checkOut;
+              const isPast  = iso < todayISO;
+              return (
+                <div
+                  key={i}
+                  onClick={() => !isPast && handleDayClick(day)}
+                  style={{
+                    aspectRatio: '1',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontFamily: 'var(--serif)', fontSize: 14,
+                    background: isEdge ? 'var(--ink)' : inRange ? 'var(--linen)' : 'transparent',
+                    color: isEdge ? 'var(--paper)' : inRange ? 'var(--ink)' : isPast ? 'var(--mute)' : 'var(--ink-3)',
+                    border: `1px solid ${isEdge ? 'var(--ink)' : inRange ? 'var(--hairline)' : 'transparent'}`,
+                    cursor: isPast ? 'default' : 'pointer',
+                    fontStyle: isEdge ? 'italic' : 'normal',
+                    opacity: isPast ? 0.38 : 1,
+                  }}
+                >
+                  {day}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Legend */}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginTop: 18, fontSize: 12, color: 'var(--mute)', fontWeight: 500 }}>
+            <span>
+              <span style={{ display: 'inline-block', width: 10, height: 10, background: 'var(--ink)', marginRight: 6, verticalAlign: 'middle' }} />
+              Arrival / Departure
+            </span>
+            <span>
+              <span style={{ display: 'inline-block', width: 10, height: 10, background: 'var(--linen)', border: '1px solid var(--hairline)', marginRight: 6, verticalAlign: 'middle' }} />
+              Stay
+            </span>
+          </div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 32 }}>
-        <div className="field">
-          <label>Adults</label>
-          <Dropdown
-            value={data.adults}
-            onChange={value => onChange('adults', Number(value))}
-            options={[1,2,3,4,5,6].map(n => ({ value: n, label: `${n} adult${n > 1 ? 's' : ''}` }))}
-            placeholder="Select adults"
-          />
-        </div>
-        <div className="field">
-          <label>Children</label>
-          <Dropdown
-            value={data.children}
-            onChange={value => onChange('children', Number(value))}
-            options={[0,1,2,3,4].map(n => ({ value: n, label: n === 0 ? 'No children' : `${n} child${n > 1 ? 'ren' : ''}` }))}
-            placeholder="Select children"
-          />
+      {/* Guests stepper */}
+      <div className="card" style={{ padding: 32 }}>
+        <div className="eyebrow" style={{ marginBottom: 18 }}>Guests</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+          <Stepper label="Adults"   value={dates.adults}   onChange={v => onDateChange('adults', v)}   min={1} max={6} />
+          <Stepper label="Children" value={dates.children} onChange={v => onDateChange('children', v)} min={0} max={4} />
         </div>
       </div>
 
-      {nights > 0 && (
-        <div style={{
-          background: 'var(--linen)', border: '1px solid var(--hairline)',
-          padding: '14px 18px', marginBottom: 28,
-          fontSize: 13, color: 'var(--ink-3)',
-          display: 'flex', alignItems: 'center', gap: 10,
-        }}>
-          <Icon name="calendar" size={14} style={{ color: 'var(--brass)' }} />
-          <span>
-            <strong style={{ color: 'var(--ink)' }}>{nights} night{nights > 1 ? 's' : ''}</strong>
-            {nights >= 3 && <span style={{ marginLeft: 8, color: 'var(--brass-deep)' }}>· Complimentary spa ritual included</span>}
-          </span>
+      {/* Contextual note */}
+      {nights >= 3 && (
+        <div className="card" style={{ padding: 24, background: 'var(--linen)' }}>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+            <Icon name="star" size={16} style={{ color: 'var(--brass-deep)', marginTop: 3, flexShrink: 0 }} />
+            <div style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.7, fontFamily: 'var(--serif)' }}>
+              <strong style={{ fontWeight: 600, color: 'var(--ink)' }}>
+                Stays of three nights or more receive a complimentary spa ritual on arrival.
+              </strong>{' '}
+              Your folio includes a spa gift — no charge.
+            </div>
+          </div>
         </div>
       )}
-
-      <button
-        className="btn btn-primary"
-        style={{ padding: '13px 28px' }}
-        onClick={() => validate() && onNext()}
-      >
-        Continue to suite selection <Icon name="arrow_right" size={12} />
-      </button>
     </div>
   );
 }
 
-// ─── Step 2 — Suite ───────────────────────────────────────────────────────────
+// ─── Step 2 — Suite ──────────────────────────────────────────────────────────
 
-function StepSuite({ dates, selectedType, onSelect, onNext, onBack }) {
+function StepSuite({ dates, selectedSuite, onSelect }) {
   const [allSuites, setAllSuites] = useState([]);
   const [available, setAvailable] = useState([]);
   const [loading,   setLoading]   = useState(true);
@@ -188,339 +435,379 @@ function StepSuite({ dates, selectedType, onSelect, onNext, onBack }) {
       .finally(() => setLoading(false));
   }, [dates.checkIn, dates.checkOut, dates.adults]);
 
-  // Merge suite marketing data with live availability (matched by slug ↔ type)
   const suites = allSuites.map((suite, i) => {
     const avail = available.find(a => a.type === suite.slug);
-    const grad  = suite.gradient || FALLBACK_GRAD[suite.slug] || 'linear-gradient(140deg, #C9AE82, #A08054)';
-    const num   = String(i + 1).padStart(2, '0');
     return {
       ...suite,
-      grad,
-      num,
+      num:       String(i + 1).padStart(2, '0'),
+      tone:      SLUG_TONES[suite.slug] || 'warm',
       available: !!avail,
-      rate:  avail?.rate  || null,
-      total: avail?.total || null,
-      count: avail?.count || 0,
+      rate:      avail?.rate  || null,
+      total:     avail?.total || null,
+      count:     avail?.count || 0,
     };
   });
 
   return (
-    <div>
-      <h2 className="display" style={{ fontSize: 40, margin: '0 0 8px' }}>
-        Choose your <em>suite.</em>
-      </h2>
-      <p style={{ fontSize: 14, color: 'var(--ink-3)', marginBottom: 32 }}>
-        {nights} night{nights > 1 ? 's' : ''} · {dates.adults} adult{dates.adults > 1 ? 's' : ''}
-        {dates.children > 0 && ` · ${dates.children} child${dates.children > 1 ? 'ren' : ''}`}
-      </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div className="eyebrow">
+        Choose your suite{available.length > 0 ? ` · ${available.length} available` : ''}
+      </div>
 
       {loading && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--mute)', marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--mute)', padding: '24px 0' }}>
           <div className="spinner" style={{ width: 16, height: 16 }} />
           Checking availability…
         </div>
       )}
+
       {error && (
         <div style={{
           background: 'var(--terracotta-soft)', border: '1px solid var(--terracotta)',
-          padding: '12px 16px', borderRadius: 'var(--radius)', fontSize: 13,
-          color: 'var(--terracotta)', marginBottom: 24, display: 'flex', gap: 8, alignItems: 'center',
+          padding: '12px 16px', fontSize: 13, color: 'var(--terracotta)',
+          display: 'flex', gap: 8, alignItems: 'center',
         }}>
           <Icon name="alert" size={13} /> {error}
         </div>
       )}
 
-      {!loading && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 28 }}>
-          {suites.map(s => {
-            const selected  = selectedType === s.name;
-            const hasImage  = s.images?.length > 0;
-            return (
-              <div
-                key={s.id}
-                onClick={() => s.available && onSelect(s.name)}
-                style={{
-                  display: 'grid', gridTemplateColumns: '120px 1fr auto',
-                  gap: 20, padding: 0, overflow: 'hidden',
-                  border: selected ? '2px solid var(--brass)' : '1px solid var(--hairline)',
-                  background: 'var(--paper)',
-                  opacity: s.available ? 1 : 0.45,
-                  cursor: s.available ? 'pointer' : 'not-allowed',
-                  transition: 'border-color 0.15s',
-                }}
-              >
-                {/* Thumbnail — image or gradient */}
-                <div style={{ position: 'relative', minHeight: 110, overflow: 'hidden' }}>
-                  {hasImage ? (
-                    <img src={s.images[0]} alt={s.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                  ) : (
-                    <div style={{ width: '100%', height: '100%', background: s.grad, position: 'absolute', inset: 0 }}>
-                      <div style={{ position: 'absolute', bottom: 8, left: 10, fontFamily: 'var(--serif)', fontSize: 28, fontStyle: 'italic', color: 'rgba(247,243,236,0.25)' }}>
-                        {s.num}
-                      </div>
-                    </div>
-                  )}
-                </div>
+      {!loading && suites.map((s, i) => {
+        const isSelected = selectedSuite?.name === s.name;
+        return (
+          <div
+            key={s.id || i}
+            onClick={() => s.available && onSelect({ name: s.name, tone: s.tone, rate: s.rate, total: s.total })}
+            style={{
+              display: 'grid', gridTemplateColumns: '240px 1fr auto',
+              gap: 0, overflow: 'hidden',
+              border: isSelected ? '2px solid var(--brass)' : '1px solid var(--hairline)',
+              background: 'var(--paper)',
+              cursor: s.available ? 'pointer' : 'not-allowed',
+              opacity: s.available ? 1 : 0.45,
+              transition: 'border-color 0.15s',
+            }}
+          >
+            {/* Photo thumbnail */}
+            <Photo tone={s.tone} ratio="4/3" num={s.num} />
 
-                {/* Details */}
-                <div style={{ padding: '18px 0' }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
-                    <h3 className="display" style={{ fontSize: 22, margin: 0 }}>{s.name}</h3>
-                    {s.sqm && <span style={{ fontSize: 12, color: 'var(--mute)' }}>{s.sqm} m²</span>}
-                  </div>
-                  {s.description && (
-                    <p style={{ fontSize: 12, color: 'var(--ink-3)', margin: '0 0 10px' }}>{s.description}</p>
-                  )}
-                  {s.amenities?.length > 0 && (
-                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                      {s.amenities.map((a, j) => (
-                        <span key={j} className="chip chip-reserved" style={{ fontSize: 10 }}>{a.label}</span>
-                      ))}
-                    </div>
-                  )}
-                  {!s.available && (
-                    <span style={{ fontSize: 11, color: 'var(--terracotta)', marginTop: 6, display: 'block' }}>
-                      Not available for selected dates
-                    </span>
-                  )}
-                </div>
-
-                {/* Price + select */}
-                <div style={{
-                  padding: '18px 20px', borderLeft: '1px solid var(--hairline-2)',
-                  display: 'flex', flexDirection: 'column',
-                  justifyContent: 'space-between', alignItems: 'flex-end',
-                  minWidth: 160, textAlign: 'right',
-                }}>
-                  {s.rate ? (
-                    <>
-                      <div>
-                        <div className="display numeral" style={{ fontSize: 26, lineHeight: 1 }}>
-                          €{s.rate.toLocaleString()}
-                        </div>
-                        <div className="label" style={{ marginTop: 2 }}>per night</div>
-                        <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4 }}>
-                          €{s.total.toLocaleString()} total
-                        </div>
-                      </div>
-                      <button
-                        className={selected ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'}
-                        onClick={e => { e.stopPropagation(); onSelect(s.name); }}
-                      >
-                        {selected ? <><Icon name="check" size={12} /> Selected</> : 'Select'}
-                      </button>
-                    </>
-                  ) : (
-                    <div style={{ fontSize: 12, color: 'var(--mute)', alignSelf: 'center' }}>Unavailable</div>
-                  )}
-                </div>
+            {/* Details */}
+            <div style={{ padding: '28px 28px 28px 32px' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6 }}>
+                <h3 className="display" style={{ fontSize: 28, margin: 0, lineHeight: 1 }}>{s.name}</h3>
+                {s.sqm && <span style={{ fontSize: 12, color: 'var(--mute)' }}>{s.sqm} m²</span>}
               </div>
-            );
-          })}
-        </div>
-      )}
+              {s.description && (
+                <p style={{ fontSize: 13, color: 'var(--mute)', margin: '0 0 14px', fontFamily: 'var(--serif)', fontStyle: 'italic' }}>
+                  {s.description}
+                </p>
+              )}
+              {s.amenities?.length > 0 && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {s.amenities.map((a, j) => (
+                    <span key={j} style={{
+                      fontSize: 11, padding: '4px 10px',
+                      border: '1px solid var(--hairline)',
+                      letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--ink-3)', fontWeight: 500,
+                    }}>
+                      {typeof a === 'object' ? a.label : a}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {!s.available && (
+                <span style={{ fontSize: 12, color: 'var(--terracotta)', marginTop: 6, display: 'block', fontWeight: 500 }}>
+                  Not available for selected dates
+                </span>
+              )}
+            </div>
 
-      <div style={{ display: 'flex', gap: 12 }}>
-        <button className="btn btn-ghost" style={{ padding: '12px 20px' }} onClick={onBack}>
-          <Icon name="arrow_left" size={12} /> Back
-        </button>
-        <button
-          className="btn btn-primary"
-          style={{ padding: '12px 24px', opacity: selectedType ? 1 : 0.5 }}
-          disabled={!selectedType}
-          onClick={onNext}
-        >
-          Continue to guest details <Icon name="arrow_right" size={12} />
-        </button>
-      </div>
+            {/* Price + select */}
+            <div style={{
+              padding: '28px 28px', borderLeft: '1px solid var(--hairline-2)',
+              display: 'flex', flexDirection: 'column',
+              justifyContent: 'space-between', alignItems: 'flex-end',
+              textAlign: 'right', minWidth: 180,
+              background: isSelected ? 'var(--linen)' : 'transparent',
+            }}>
+              {s.rate ? (
+                <>
+                  <div>
+                    <div className="display numeral" style={{ fontSize: 32, lineHeight: 1, fontStyle: 'italic' }}>
+                      €{s.rate.toLocaleString()}
+                    </div>
+                    <div className="label" style={{ marginTop: 4 }}>per night</div>
+                    {s.total && (
+                      <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 4, fontWeight: 500 }}>
+                        €{s.total.toLocaleString()} total
+                      </div>
+                    )}
+                  </div>
+                  <div
+                    className={isSelected ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'}
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    {isSelected ? <><Icon name="check" size={12} /> Selected</> : 'Select'}
+                  </div>
+                </>
+              ) : (
+                <div style={{ fontSize: 12, color: 'var(--mute)', alignSelf: 'center' }}>Unavailable</div>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 // ─── Step 3 — Guest details ───────────────────────────────────────────────────
 
-function StepDetails({ data, onChange, onNext, onBack }) {
-  const [errors, setErrors] = useState({});
-
-  function validate() {
-    const e = {};
-    if (!data.firstName.trim()) e.firstName = 'First name is required.';
-    if (!data.lastName.trim())  e.lastName  = 'Last name is required.';
-    if (!data.phone.trim())     e.phone     = 'Phone number is required.';
-    setErrors(e);
-    return !Object.keys(e).length;
-  }
-
-  function set(field, value) {
-    onChange(field, value);
-    setErrors(v => ({ ...v, [field]: '' }));
-  }
-
+function StepDetails({ details, onChange }) {
   return (
-    <div style={{ maxWidth: 580 }}>
-      <h2 className="display" style={{ fontSize: 40, margin: '0 0 8px' }}>
-        Your <em>details.</em>
-      </h2>
-      <p style={{ fontSize: 14, color: 'var(--ink-3)', marginBottom: 32 }}>
-        We'll use this to prepare your arrival and send your confirmation.
-      </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-        <div className="field">
-          <label>First name <span style={{ color: 'var(--terracotta)' }}>*</span></label>
-          <input
-            value={data.firstName}
-            onChange={e => set('firstName', e.target.value)}
-            placeholder="Your first name"
-            style={errors.firstName ? { borderColor: 'var(--terracotta)' } : {}}
-          />
-          {errors.firstName && <p style={{ color: 'var(--terracotta)', fontSize: 12, marginTop: 4 }}>{errors.firstName}</p>}
-        </div>
-        <div className="field">
-          <label>Last name <span style={{ color: 'var(--terracotta)' }}>*</span></label>
-          <input
-            value={data.lastName}
-            onChange={e => set('lastName', e.target.value)}
-            placeholder="Your last name"
-            style={errors.lastName ? { borderColor: 'var(--terracotta)' } : {}}
-          />
-          {errors.lastName && <p style={{ color: 'var(--terracotta)', fontSize: 12, marginTop: 4 }}>{errors.lastName}</p>}
-        </div>
-      </div>
-
-      <div className="field" style={{ marginBottom: 16 }}>
-        <label>Phone number <span style={{ color: 'var(--terracotta)' }}>*</span></label>
-        <input
-          type="tel"
-          value={data.phone}
-          onChange={e => set('phone', e.target.value)}
-          placeholder="+1 555 000 0000"
-          style={errors.phone ? { borderColor: 'var(--terracotta)' } : {}}
-        />
-        {errors.phone && <p style={{ color: 'var(--terracotta)', fontSize: 12, marginTop: 4 }}>{errors.phone}</p>}
-      </div>
-
-      <div className="field" style={{ marginBottom: 16 }}>
-        <label>Nationality <span style={{ fontSize: 11, color: 'var(--mute)', fontWeight: 400 }}>optional</span></label>
-        <input
-          value={data.nationality}
-          onChange={e => onChange('nationality', e.target.value)}
-          placeholder="e.g. French"
-        />
-      </div>
-
-      <div className="field" style={{ marginBottom: 32 }}>
-        <label>Special requests <span style={{ fontSize: 11, color: 'var(--mute)', fontWeight: 400 }}>optional</span></label>
-        <textarea
-          rows={3}
-          value={data.specialRequests}
-          onChange={e => onChange('specialRequests', e.target.value)}
-          placeholder="Dietary requirements, room preferences, celebration arrangements…"
-          style={{ resize: 'vertical' }}
-        />
-      </div>
-
-      <div style={{ display: 'flex', gap: 12 }}>
-        <button className="btn btn-ghost" style={{ padding: '12px 20px' }} onClick={onBack}>
-          <Icon name="arrow_left" size={12} /> Back
-        </button>
-        <button
-          className="btn btn-primary"
-          style={{ padding: '12px 24px' }}
-          onClick={() => validate() && onNext()}
-        >
-          Review & confirm <Icon name="arrow_right" size={12} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Step 4 — Confirm ─────────────────────────────────────────────────────────
-
-function SummaryRow({ label, value }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '8px 0', borderBottom: '1px solid var(--hairline-2)' }}>
-      <span style={{ color: 'var(--ink-3)' }}>{label}</span>
-      <span style={{ fontWeight: 500 }}>{value}</span>
-    </div>
-  );
-}
-
-function StepConfirm({ dates, suite, details, onBack, onSubmit, loading }) {
-  const nights = Math.ceil(
-    (new Date(dates.checkOut) - new Date(dates.checkIn)) / 86400000
-  );
-  const suiteGrad = FALLBACK_GRAD[SUITE_NAME_TO_SLUG[suite]] || 'linear-gradient(140deg, #C9AE82, #A08054)';
-
-  function fmtDate(iso) {
-    return new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
-  }
-
-  return (
-    <div style={{ maxWidth: 640 }}>
-      <h2 className="display" style={{ fontSize: 40, margin: '0 0 8px' }}>
-        Review your <em>stay.</em>
-      </h2>
-      <p style={{ fontSize: 14, color: 'var(--ink-3)', marginBottom: 32 }}>
-        Please review the details below before confirming.
-      </p>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
-        {/* Suite card */}
-        <div style={{
-          background: suiteGrad,
-          position: 'relative', aspectRatio: '16/9', overflow: 'hidden',
-        }}>
-          <div style={{
-            position: 'absolute', bottom: 16, left: 18,
-            color: 'var(--paper)',
-          }}>
-            <div className="eyebrow" style={{ color: 'rgba(247,243,236,0.7)', marginBottom: 4 }}>Selected</div>
-            <div className="display" style={{ fontSize: 22 }}>{suite}</div>
+      {/* Primary guest */}
+      <div className="card" style={{ padding: 32 }}>
+        <div className="eyebrow" style={{ marginBottom: 20 }}>Primary guest</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+          <div className="field">
+            <label>First name <span style={{ color: 'var(--terracotta)' }}>*</span></label>
+            <input
+              value={details.firstName}
+              onChange={e => onChange('firstName', e.target.value)}
+              placeholder="Your given name"
+            />
+          </div>
+          <div className="field">
+            <label>Last name <span style={{ color: 'var(--terracotta)' }}>*</span></label>
+            <input
+              value={details.lastName}
+              onChange={e => onChange('lastName', e.target.value)}
+              placeholder="Family name"
+            />
+          </div>
+          <div className="field">
+            <label>Mobile <span style={{ color: 'var(--terracotta)' }}>*</span></label>
+            <input
+              type="tel"
+              value={details.phone}
+              onChange={e => onChange('phone', e.target.value)}
+              placeholder="+33 6 12 34 56 78"
+            />
+          </div>
+          <div className="field">
+            <label>
+              Nationality{' '}
+              <span style={{ fontSize: 11, color: 'var(--mute)', fontWeight: 400 }}>optional</span>
+            </label>
+            <input
+              value={details.nationality}
+              onChange={e => onChange('nationality', e.target.value)}
+              placeholder="e.g. French"
+            />
           </div>
         </div>
+      </div>
 
-        {/* Booking summary */}
-        <div className="card" style={{ padding: 20 }}>
-          <SummaryRow label="Guest"        value={`${details.firstName} ${details.lastName}`} />
-          <SummaryRow label="Arrival"      value={fmtDate(dates.checkIn)} />
-          <SummaryRow label="Departure"    value={fmtDate(dates.checkOut)} />
-          <SummaryRow label="Nights"       value={nights} />
-          <SummaryRow label="Guests"       value={`${dates.adults} adult${dates.adults > 1 ? 's' : ''}${dates.children > 0 ? ` · ${dates.children} child${dates.children > 1 ? 'ren' : ''}` : ''}`} />
+      {/* Preferences */}
+      <div className="card" style={{ padding: 32 }}>
+        <div className="eyebrow" style={{ marginBottom: 20 }}>Preferences</div>
+
+        <div className="label" style={{ marginBottom: 10 }}>Bedding</div>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
+          {['King', 'Twin', 'Connecting'].map(b => (
+            <button
+              key={b}
+              onClick={() => onChange('bed', b)}
+              style={{
+                padding: '12px 22px',
+                border: `1px solid ${details.bed === b ? 'var(--ink)' : 'var(--hairline)'}`,
+                background: details.bed === b ? 'var(--ink)' : 'transparent',
+                color: details.bed === b ? 'var(--paper)' : 'var(--ink)',
+                fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 15, cursor: 'pointer',
+              }}
+            >
+              {b}
+            </button>
+          ))}
+        </div>
+
+        <div className="label" style={{ marginBottom: 10 }}>Occasion</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 24 }}>
+          {[
+            { id: 'None',        i: 'leaf'  },
+            { id: 'Honeymoon',   i: 'crown' },
+            { id: 'Anniversary', i: 'star'  },
+            { id: 'Birthday',    i: 'spa'   },
+          ].map(o => (
+            <button
+              key={o.id}
+              onClick={() => onChange('occasion', o.id)}
+              style={{
+                padding: '16px 14px',
+                border: `1px solid ${details.occasion === o.id ? 'var(--brass)' : 'var(--hairline)'}`,
+                background: details.occasion === o.id ? 'var(--linen)' : 'transparent',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                fontSize: 12, fontFamily: 'var(--serif)', cursor: 'pointer',
+              }}
+            >
+              <Icon name={o.i} size={18} style={{ color: 'var(--brass-deep)' }} />
+              {o.id}
+            </button>
+          ))}
+        </div>
+
+        <div className="field">
+          <label>
+            Special requests{' '}
+            <span style={{ fontSize: 11, color: 'var(--mute)', fontWeight: 400 }}>optional</span>
+          </label>
+          <textarea
+            value={details.specialRequests}
+            onChange={e => onChange('specialRequests', e.target.value)}
+            rows={3}
+            placeholder="Allergies, transfers, surprises, particular bottles…"
+            style={{ resize: 'vertical', fontFamily: 'var(--serif)', fontStyle: 'italic' }}
+          />
         </div>
       </div>
 
-      {/* Cancellation note */}
-      <div style={{
-        background: 'var(--linen)', padding: '14px 18px', fontSize: 13,
-        color: 'var(--ink-3)', marginBottom: 28, lineHeight: 1.6,
-        border: '1px solid var(--hairline)',
-      }}>
-        <strong style={{ color: 'var(--ink)' }}>Free cancellation</strong> up to 72 hours before arrival.
-        A 30% deposit will be collected to hold your reservation.
+      {/* Étoile member promo */}
+      <div className="card" style={{ padding: 24, background: 'var(--linen)' }}>
+        <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+          <Icon name="crown" size={16} style={{ color: 'var(--brass-deep)', marginTop: 3, flexShrink: 0 }} />
+          <div style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.7, fontFamily: 'var(--serif)' }}>
+            <strong style={{ fontWeight: 600, color: 'var(--ink)' }}>Become an Étoile member.</strong>{' '}
+            Complimentary on first stay. Earn one night for every five, plus a private welcome on every arrival.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Step 4 — Review & pay ────────────────────────────────────────────────────
+
+function ReviewRow({ l, v }) {
+  return (
+    <div style={{ paddingBottom: 14, borderBottom: '1px dotted var(--hairline)' }}>
+      <div className="label" style={{ marginBottom: 4 }}>{l}</div>
+      <div style={{ fontSize: 14, fontFamily: 'var(--serif)', fontStyle: 'italic' }}>{v || '—'}</div>
+    </div>
+  );
+}
+
+function StepReview({ dates, selectedSuite, details, total, onChange }) {
+  const nights = dates.checkIn && dates.checkOut
+    ? Math.ceil((new Date(dates.checkOut) - new Date(dates.checkIn)) / 86400000) : 0;
+
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    return new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', {
+      weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
+    });
+  }
+
+  const deposit = Math.round(total * 0.3);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+
+      {/* Reservation summary */}
+      <div className="card" style={{ padding: 32 }}>
+        <div className="eyebrow" style={{ marginBottom: 18 }}>Your reservation</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+          <ReviewRow l="Guest"     v={`${details.firstName} ${details.lastName}`.trim()} />
+          <ReviewRow l="Suite"     v={selectedSuite?.name} />
+          <ReviewRow l="Bed"       v={details.bed || 'King'} />
+          <ReviewRow l="Arrival"   v={fmtDate(dates.checkIn)} />
+          <ReviewRow l="Departure" v={fmtDate(dates.checkOut)} />
+          <ReviewRow l="Nights"    v={String(nights)} />
+          <ReviewRow
+            l="Guests"
+            v={`${dates.adults} adult${dates.adults > 1 ? 's' : ''}${dates.children ? `, ${dates.children} child${dates.children > 1 ? 'ren' : ''}` : ''}`}
+          />
+          <ReviewRow l="Occasion"  v={details.occasion || 'None'} />
+          <ReviewRow l="Notes"     v={details.specialRequests} />
+        </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 12 }}>
-        <button
-          className="btn btn-ghost"
-          style={{ padding: '12px 20px' }}
-          onClick={onBack}
-          disabled={loading}
-        >
-          <Icon name="arrow_left" size={12} /> Back
-        </button>
-        <button
-          className="btn btn-primary"
-          style={{ padding: '13px 28px', opacity: loading ? 0.7 : 1 }}
-          disabled={loading}
-          onClick={onSubmit}
-        >
-          {loading
-            ? <><div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} /> Confirming…</>
-            : <>Confirm reservation <Icon name="arrow_right" size={12} /></>
-          }
-        </button>
+      {/* Payment */}
+      <div className="card" style={{ padding: 32 }}>
+        <div className="eyebrow" style={{ marginBottom: 18 }}>Payment · 30% deposit</div>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+          {['Visa', 'Mastercard', 'Amex', 'Apple Pay'].map(p => (
+            <div key={p} style={{
+              padding: '10px 16px', border: '1px solid var(--hairline)',
+              fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--ink-3)',
+            }}>{p}</div>
+          ))}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 18, marginBottom: 18 }}>
+          <div className="field" style={{ gridColumn: 'span 3' }}>
+            <label>Card number</label>
+            <input
+              value={details.card}
+              onChange={e => onChange('card', e.target.value)}
+              placeholder="•••• •••• •••• ••••"
+              style={{ fontFamily: 'var(--mono)', letterSpacing: '0.1em' }}
+            />
+          </div>
+          <div className="field">
+            <label>Expiry</label>
+            <input
+              value={details.expiry}
+              onChange={e => onChange('expiry', e.target.value)}
+              placeholder="MM / YY"
+            />
+          </div>
+          <div className="field">
+            <label>CVV</label>
+            <input
+              value={details.cvv}
+              onChange={e => onChange('cvv', e.target.value)}
+              placeholder="•••"
+            />
+          </div>
+          <div className="field">
+            <label>Name on card</label>
+            <input
+              value={details.cardName}
+              onChange={e => onChange('cardName', e.target.value)}
+              placeholder="As printed"
+            />
+          </div>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--mute)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="key" size={12} />
+          Secured with 3-D Secure · charges appear as "LuxuryStay Nice"
+        </div>
+      </div>
+
+      {/* T&C checkbox */}
+      <div className="card" style={{ padding: 24 }}>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}>
+          <span
+            style={{
+              width: 18, height: 18, marginTop: 2, flexShrink: 0,
+              border: `1px solid ${details.accepted ? 'var(--ink)' : 'var(--hairline)'}`,
+              background: details.accepted ? 'var(--ink)' : 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+            onClick={() => onChange('accepted', !details.accepted)}
+          >
+            {details.accepted && <Icon name="check" size={11} style={{ color: 'var(--paper)' }} />}
+          </span>
+          <span style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.6, fontFamily: 'var(--serif)' }}>
+            I agree to the{' '}
+            <a style={{ color: 'var(--brass-deep)', borderBottom: '1px solid var(--brass-deep)', cursor: 'pointer' }}>house terms</a>
+            {' '}and{' '}
+            <a style={{ color: 'var(--brass-deep)', borderBottom: '1px solid var(--brass-deep)', cursor: 'pointer' }}>cancellation policy</a>
+            , and authorise a deposit of{' '}
+            <strong style={{ color: 'var(--ink)' }}>€{deposit.toLocaleString()}</strong>
+            {' '}to be charged today. The balance is settled on departure.
+          </span>
+        </label>
       </div>
     </div>
   );
@@ -528,31 +815,40 @@ function StepConfirm({ dates, suite, details, onBack, onSubmit, loading }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-const STEPS = ['Dates', 'Suite', 'Your details', 'Confirm'];
-
 export default function GuestBookPage() {
-  const navigate      = useNavigate();
-  const location      = useLocation();
-  const toast         = useToast();
-  const queryClient   = useQueryClient();
+  const navigate    = useNavigate();
+  const location    = useLocation();
+  const toast       = useToast();
+  const queryClient = useQueryClient();
   const { isAuthenticated, user } = useAuth();
 
   const [step, setStep] = useState(0);
 
-  // Seed suite from navigation state (e.g. clicking Reserve on SuitesPage)
   const preselectedSuite = location.state?.suite || '';
 
-  const [dates, setDates] = useState({
-    checkIn: '', checkOut: '', adults: 2, children: 0,
-  });
-  const [selectedSuite, setSelectedSuite] = useState(preselectedSuite);
+  const [dates, setDates] = useState({ checkIn: '', checkOut: '', adults: 2, children: 0 });
+
+  const [selectedSuite, setSelectedSuite] = useState(
+    preselectedSuite
+      ? { name: preselectedSuite, tone: NAME_TONES[preselectedSuite] || 'warm', rate: null, total: null }
+      : null
+  );
+
   const [details, setDetails] = useState({
-    firstName:       user?.name?.split(' ')[0] || '',
+    firstName:       user?.name?.split(' ')[0]             || '',
     lastName:        user?.name?.split(' ').slice(1).join(' ') || '',
     phone:           user?.phone || '',
     nationality:     '',
     specialRequests: '',
+    bed:             'King',
+    occasion:        'None',
+    card:            '',
+    expiry:          '',
+    cvv:             '',
+    cardName:        '',
+    accepted:        false,
   });
+
   const [submitting, setSubmitting] = useState(false);
 
   function updateDate(field, value) {
@@ -563,13 +859,38 @@ export default function GuestBookPage() {
     setDetails(d => ({ ...d, [field]: value }));
   }
 
+  // Derived values
+  const nights = dates.checkIn && dates.checkOut
+    ? Math.ceil((new Date(dates.checkOut) - new Date(dates.checkIn)) / 86400000) : 0;
+
+  const subtotal = selectedSuite?.total
+    || (selectedSuite?.rate && nights > 0 ? selectedSuite.rate * nights : 0);
+  const tax   = Math.round(subtotal * 0.1);
+  const total = subtotal > 0 ? subtotal + tax + 20 : 0;
+
+  const cancelBy = (() => {
+    if (!dates.checkIn) return null;
+    const d = new Date(dates.checkIn + 'T00:00:00');
+    d.setDate(d.getDate() - 3);
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  })();
+
+  const canContinue = [
+    !!(dates.checkIn && dates.checkOut && nights > 0),
+    selectedSuite !== null,
+    !!(details.firstName.trim() && details.lastName.trim() && details.phone.trim()),
+    !!(details.accepted && details.card.trim()),
+  ][step];
+
+  const ctaLabel = CTA_LABELS[step];
+  const t        = STEP_TITLES[step];
+
   async function handleSubmit() {
     if (!isAuthenticated || user?.role !== 'guest') {
       toast.error('Please sign in to your guest account to complete the booking.');
       navigate('/login', { state: { from: { pathname: '/book' } } });
       return;
     }
-
     setSubmitting(true);
     try {
       const { data } = await api.post('/api/guest/book', {
@@ -577,7 +898,7 @@ export default function GuestBookPage() {
         checkOut:        dates.checkOut,
         adults:          dates.adults,
         children:        dates.children,
-        roomType:        selectedSuite,
+        roomType:        selectedSuite.name,
         firstName:       details.firstName.trim(),
         lastName:        details.lastName.trim(),
         phone:           details.phone.trim(),
@@ -593,56 +914,88 @@ export default function GuestBookPage() {
     }
   }
 
+  function handleContinue() {
+    if (step === 3) handleSubmit();
+    else setStep(s => s + 1);
+  }
+
+  const submittingCta = step === 3 && submitting;
+
   return (
     <PublicShell>
-      <section style={{ padding: '60px 64px 100px', maxWidth: 1100, margin: '0 auto' }}>
+      <section style={{ padding: '48px 64px 80px', maxWidth: 1440, margin: '0 auto' }}>
 
-        {/* Step indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 48 }}>
-          {STEPS.map((label, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, flex: i < STEPS.length - 1 ? '1' : undefined }}>
-              <BookStep n={i + 1} label={label} done={step > i} current={step === i} />
-              {i < STEPS.length - 1 && <StepLine />}
+        <StepIndicator step={step} />
+
+        <div className="eyebrow" style={{ marginBottom: 14, color: 'var(--brass-deep)' }}>{t.eyebrow}</div>
+        <h1 className="display" style={{ fontSize: 'clamp(48px, 6.4vw, 80px)', margin: '0 0 12px', lineHeight: 1.02 }}>
+          {t.h}
+        </h1>
+        <p style={{ fontSize: 15, color: 'var(--ink-3)', marginBottom: 40, maxWidth: 600, fontFamily: 'var(--serif)' }}>
+          {t.sub}
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 40 }}>
+
+          {/* ── Left: step content ── */}
+          <div>
+            {step === 0 && (
+              <StepDates dates={dates} onDateChange={updateDate} />
+            )}
+            {step === 1 && (
+              <StepSuite dates={dates} selectedSuite={selectedSuite} onSelect={setSelectedSuite} />
+            )}
+            {step === 2 && (
+              <StepDetails details={details} onChange={updateDetail} />
+            )}
+            {step === 3 && (
+              <StepReview
+                dates={dates}
+                selectedSuite={selectedSuite}
+                details={details}
+                total={total}
+                onChange={updateDetail}
+              />
+            )}
+
+            {/* Bottom navigation */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between',
+              marginTop: 32, paddingTop: 24, borderTop: '1px solid var(--hairline)',
+            }}>
+              {step > 0 ? (
+                <button className="btn btn-ghost" onClick={() => setStep(s => s - 1)}>
+                  <Icon name="arrow_left" size={12} /> Back · {BACK_LABELS[step - 1]}
+                </button>
+              ) : <span />}
+              <button
+                className="btn btn-primary"
+                disabled={!canContinue || submitting}
+                style={{ opacity: canContinue && !submitting ? 1 : 0.5 }}
+                onClick={handleContinue}
+              >
+                {submittingCta
+                  ? <><div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} /> Confirming…</>
+                  : <>{ctaLabel} <Icon name="arrow_right" size={12} /></>
+                }
+              </button>
             </div>
-          ))}
-        </div>
+          </div>
 
-        {/* Step content */}
-        {step === 0 && (
-          <StepDates
-            data={dates}
-            onChange={updateDate}
-            onNext={() => setStep(1)}
-          />
-        )}
-        {step === 1 && (
-          <StepSuite
-            dates={dates}
-            selectedType={selectedSuite}
-            onSelect={setSelectedSuite}
-            onNext={() => setStep(2)}
-            onBack={() => setStep(0)}
-          />
-        )}
-        {step === 2 && (
-          <StepDetails
-            data={details}
-            onChange={updateDetail}
-            onNext={() => setStep(3)}
-            onBack={() => setStep(1)}
-          />
-        )}
-        {step === 3 && (
-          <StepConfirm
-            dates={dates}
+          {/* ── Right: Folio Rail ── */}
+          <FolioRail
             suite={selectedSuite}
-            details={details}
-            onBack={() => setStep(2)}
-            onSubmit={handleSubmit}
-            loading={submitting}
+            nights={nights}
+            subtotal={subtotal}
+            tax={tax}
+            total={total}
+            cancelBy={cancelBy}
+            onContinue={handleContinue}
+            ctaLabel={submittingCta ? 'Confirming…' : ctaLabel}
+            canContinue={canContinue && !submitting}
           />
-        )}
 
+        </div>
       </section>
     </PublicShell>
   );

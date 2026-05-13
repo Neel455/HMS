@@ -1,159 +1,172 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PublicShell from '../../layouts/PublicShell';
+import Photo from '../../components/Photo';
 import Icon from '../../components/Icon';
-import api from '../../lib/api';
 
-// Fallback gradients keyed by slug, used when a suite has no image
-const FALLBACK_GRAD = {
-  deluxe_twin:   'linear-gradient(140deg, #EFE8DB, #C9AE82)',
-  deluxe_king:   'linear-gradient(140deg, #C9AE82, #A08054)',
-  junior_suite:  'linear-gradient(140deg, #A08054, #806339)',
-  premier_suite: 'linear-gradient(140deg, #806339, #4A443B)',
-  penthouse:     'linear-gradient(140deg, #4A443B, #1A1814)',
-};
+const SC = { fontFamily: 'var(--sc)', fontSize: 12, letterSpacing: '0.26em', textTransform: 'uppercase', fontWeight: 600 };
 
-function SuiteVisual({ suite, index }) {
-  const hasImage = suite.images?.length > 0;
-  const grad     = suite.gradient || FALLBACK_GRAD[suite.slug] || 'linear-gradient(140deg, #C9AE82, #A08054)';
-  const num      = String(index + 1).padStart(2, '0');
+const SUITES = [
+  {
+    name: 'Deluxe Twin',
+    from: 460, sqm: 28, tone: 'ivory', beds: '2 twin', view: 'Garden',
+    desc: 'Twin beds for travel companions or family. Garden-side aspect, full marble bath, walk-in shower.',
+    amenities: ['Walk-in shower', 'Espresso', 'Linens · Florence', 'Fibre Wi-Fi'],
+    cat: 'deluxe', mood: 'side',
+  },
+  {
+    name: 'Deluxe King',
+    from: 480, sqm: 32, tone: 'warm', beds: '1 king', view: 'Garden or Promenade',
+    desc: 'Our signature category. King bed, sitting nook, French balcony with views over the gardens or Promenade des Anglais.',
+    amenities: ['French balcony', 'Soaking tub', 'Espresso', 'Bath ritual'],
+    cat: 'deluxe', mood: 'topright',
+  },
+  {
+    name: 'Junior Suite',
+    from: 720, sqm: 48, tone: 'sand', beds: '1 king + sitting', view: 'Sea',
+    desc: 'Generous proportions, separate sitting area, soaking tub overlooking the sea. Espresso service standard.',
+    amenities: ['Sea view', 'Soaking tub', 'Sitting room', 'In-room dining'],
+    cat: 'suite', mood: 'topleft',
+  },
+  {
+    name: 'Premier Suite',
+    from: 1240, sqm: 76, tone: 'deep', beds: '1 king + sitting', view: 'Sea · private terrace',
+    desc: 'Two-bedroom configuration available. Private terrace, dressing room, dedicated butler service.',
+    amenities: ['Private terrace', 'Dressing room', 'Butler service', 'Dining for six'],
+    cat: 'suite', mood: 'side',
+  },
+  {
+    name: 'Penthouse',
+    from: 2400, sqm: 180, tone: 'night', beds: '2 king', view: 'Panoramic Mediterranean',
+    desc: 'The crown of the house. Wraparound terrace with plunge pool, dining for ten, panoramic Mediterranean views.',
+    amenities: ['Plunge pool', 'Dining for ten', 'Butler · 24h', 'Private chef'],
+    cat: 'signature', mood: 'bottom',
+  },
+];
 
-  return (
-    <div style={{ aspectRatio: '4/3', position: 'relative', overflow: 'hidden' }}>
-      {hasImage ? (
-        <img
-          src={suite.images[0]}
-          alt={suite.name}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-        />
-      ) : (
-        <div style={{ width: '100%', height: '100%', background: grad }}>
-          <div style={{
-            position: 'absolute', top: 24, left: 24,
-            fontFamily: 'var(--serif)', fontSize: 96, fontStyle: 'italic',
-            color: 'rgba(247,243,236,0.18)', lineHeight: 0.9,
-          }}>
-            {num}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+const FILTERS = [
+  { id: 'all',       label: 'All · 5'   },
+  { id: 'deluxe',    label: 'Deluxe'    },
+  { id: 'suite',     label: 'Suites'    },
+  { id: 'signature', label: 'Signature' },
+];
 
 export default function SuitesPage() {
   const navigate = useNavigate();
-  const [suites,  setSuites]  = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all');
 
-  useEffect(() => {
-    api.get('/api/suites')
-      .then(r => setSuites(r.data?.data?.suites ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+  const shown = filter === 'all' ? SUITES : SUITES.filter(s => s.cat === filter);
 
   return (
     <PublicShell>
 
-      {/* ── Intro ────────────────────────────────────────────────────── */}
-      <section style={{ padding: '80px 64px 40px', maxWidth: 1280, margin: '0 auto' }}>
-        <div className="eyebrow" style={{ marginBottom: 18 }}>The accommodations</div>
-        <h1
-          className="display"
-          style={{ fontSize: 'clamp(52px, 6vw, 84px)', margin: '0 0 24px', lineHeight: 0.95, maxWidth: 900 }}
-        >
-          Forty-two rooms, <em>each composed</em> by hand.
-        </h1>
-        <p style={{ fontSize: 16, color: 'var(--ink-3)', lineHeight: 1.7, maxWidth: 600, marginBottom: 64 }}>
-          Five categories. Walnut joinery, linens from Florence, marble bathrooms
-          drawn from the Carrara quarries. No two suites are identical.
-        </p>
+      {/* ── Intro ────────────────────────────────────────────────────────── */}
+      <section style={{ padding: '60px 64px 32px', maxWidth: 1440, margin: '0 auto' }}>
+        <div style={{ ...SC, color: 'var(--mute)', marginBottom: 18 }}>The accommodations · Folio II</div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 64, alignItems: 'end' }}>
+          <h1 className="display" style={{ fontSize: 'clamp(52px, 7vw, 96px)', margin: 0, lineHeight: 0.92 }}>
+            Forty-two rooms,<br /><em>each composed</em><br />by hand.
+          </h1>
+
+          <div>
+            <p style={{ fontSize: 16, color: 'var(--ink-3)', lineHeight: 1.75, fontFamily: 'var(--serif)', fontWeight: 500, marginBottom: 32 }}>
+              Five categories. Walnut joinery from the Jura, linens from Florence, marble
+              bathrooms drawn from the Carrara quarries. No two suites are identical — each
+              carries the trace of the artisans who shaped it.
+            </p>
+
+            {/* filter buttons */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {FILTERS.map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setFilter(f.id)}
+                  style={{
+                    padding: '8px 16px',
+                    border: `1px solid ${filter === f.id ? 'var(--ink)' : 'var(--hairline)'}`,
+                    background: filter === f.id ? 'var(--ink)' : 'transparent',
+                    color: filter === f.id ? 'var(--paper)' : 'var(--ink)',
+                    fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase',
+                    cursor: 'pointer', transition: 'all 0.15s',
+                  }}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       </section>
 
-      {/* ── Suite list ───────────────────────────────────────────────── */}
-      <section style={{ padding: '0 64px 100px', maxWidth: 1280, margin: '0 auto' }}>
-
-        {loading && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--mute)', padding: '60px 0' }}>
-            <div className="spinner" style={{ width: 18, height: 18 }} />
-            Loading suites…
-          </div>
-        )}
-
-        {!loading && suites.length === 0 && (
-          <div style={{ padding: '60px 0', color: 'var(--mute)', fontSize: 14 }}>
-            Suite details coming soon. Please contact our concierge for availability.
-          </div>
-        )}
-
-        {!loading && suites.map((suite, i) => {
-          const imageLeft = i % 2 !== 0;
+      {/* ── Suite list ───────────────────────────────────────────────────── */}
+      <section style={{ padding: '60px 64px 100px', maxWidth: 1440, margin: '0 auto' }}>
+        {shown.map((s, i) => {
+          const imageLeft = i % 2 === 0;
           return (
             <div
-              key={suite.id}
+              key={s.name}
               style={{
                 display: 'grid',
-                gridTemplateColumns: imageLeft ? '1fr 1.2fr' : '1.2fr 1fr',
-                gap: 60,
-                alignItems: 'center',
+                gridTemplateColumns: imageLeft ? '1.1fr 1fr' : '1fr 1.1fr',
+                gap: 72, alignItems: 'center',
                 padding: '60px 0',
-                borderTop: i > 0 ? '1px solid var(--hairline-2)' : 'none',
+                borderTop: '1px solid var(--hairline)',
               }}
             >
-              <div style={{ order: imageLeft ? 0 : 1 }}>
-                <SuiteVisual suite={suite} index={i} />
+              {/* Photo side */}
+              <div style={{ order: imageLeft ? 0 : 1, position: 'relative' }}>
+                <Photo tone={s.tone} ratio="4/5" num={`0${i + 1}`} mood={s.mood} />
+                {/* floating sqm badge */}
+                <div style={{
+                  position: 'absolute', top: 24, right: -24,
+                  padding: '8px 14px',
+                  background: 'var(--ivory)', border: '1px solid var(--hairline)',
+                  fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--mute)', fontWeight: 500,
+                }}>
+                  {s.sqm} m² · {s.beds}
+                </div>
               </div>
 
+              {/* Copy side */}
               <div style={{ order: imageLeft ? 1 : 0 }}>
-                <div className="eyebrow" style={{ marginBottom: 14 }}>
-                  Category {String(i + 1).padStart(2, '0')}{suite.sqm ? ` · ${suite.sqm} m²` : ''}
+                <div style={{ ...SC, color: 'var(--brass-deep)', marginBottom: 14 }}>
+                  Category 0{i + 1} · {s.view}
                 </div>
-                <h2
-                  className="display"
-                  style={{ fontSize: 'clamp(36px, 4vw, 56px)', margin: '0 0 18px', lineHeight: 1 }}
-                >
-                  {suite.name}
+
+                <h2 className="display" style={{ fontSize: 'clamp(36px, 4vw, 64px)', margin: '0 0 20px', lineHeight: 1 }}>
+                  {s.name}
                 </h2>
-                {suite.description && (
-                  <p style={{ fontSize: 15, color: 'var(--ink-3)', lineHeight: 1.7, marginBottom: 28, maxWidth: 480 }}>
-                    {suite.description}
-                  </p>
-                )}
 
-                {suite.amenities?.length > 0 && (
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 28, flexWrap: 'wrap' }}>
-                    {suite.amenities.map((a, j) => (
-                      <span
-                        key={j}
-                        className={a.vip ? 'chip chip-vip' : 'chip chip-reserved'}
-                        style={{ display: 'flex', alignItems: 'center', gap: 5 }}
-                      >
-                        <Icon name={a.icon} size={10} />
-                        {a.label}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <p style={{ fontSize: 16, color: 'var(--ink-3)', lineHeight: 1.75, marginBottom: 28, maxWidth: 480, fontFamily: 'var(--serif)', fontWeight: 500 }}>
+                  {s.desc}
+                </p>
 
+                {/* amenities — inline dot list */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 32, maxWidth: 440 }}>
+                  {s.amenities.map((a, j) => (
+                    <div key={j} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ink-3)', fontWeight: 500 }}>
+                      <span style={{ color: 'var(--brass)', fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 16 }}>·</span>
+                      {a}
+                    </div>
+                  ))}
+                </div>
+
+                {/* price + CTA */}
                 <div style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
-                  paddingTop: 24, borderTop: '1px solid var(--hairline)',
+                  paddingTop: 24, borderTop: '1px solid var(--hairline)', maxWidth: 480,
                 }}>
                   <div>
-                    {suite.baseRate != null && (
-                      <>
-                        <div className="label">From</div>
-                        <div className="display numeral" style={{ fontSize: 40, lineHeight: 1, marginTop: 4 }}>
-                          €{Number(suite.baseRate).toLocaleString()}
-                          <span style={{ fontSize: 14, color: 'var(--mute)', marginLeft: 6 }}>/ night</span>
-                        </div>
-                      </>
-                    )}
+                    <div className="label" style={{ marginBottom: 4 }}>From</div>
+                    <div className="display numeral" style={{ fontSize: 48, lineHeight: 1, fontStyle: 'italic' }}>
+                      €{s.from.toLocaleString()}
+                      <span style={{ fontSize: 14, color: 'var(--ink-3)', marginLeft: 8, fontStyle: 'normal', fontWeight: 500 }}>/ night</span>
+                    </div>
                   </div>
                   <button
                     className="btn btn-primary"
-                    onClick={() => navigate('/book', { state: { suite: suite.name } })}
+                    onClick={() => navigate('/book', { state: { suite: s.name } })}
                   >
                     Reserve <Icon name="arrow_right" size={12} />
                   </button>
@@ -162,29 +175,6 @@ export default function SuitesPage() {
             </div>
           );
         })}
-      </section>
-
-      {/* ── Bottom CTA band ──────────────────────────────────────────── */}
-      <section style={{
-        background: 'var(--linen)', border: '1px solid var(--hairline)',
-        margin: '0 64px 80px', padding: '48px 56px',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 40,
-      }}>
-        <div>
-          <div className="eyebrow" style={{ marginBottom: 10 }}>Not sure which suite?</div>
-          <p style={{ fontSize: 15, color: 'var(--ink-3)', margin: 0, maxWidth: 480 }}>
-            Our concierge is available around the clock to help you find the perfect
-            accommodation for your stay.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 12, flexShrink: 0 }}>
-          <button className="btn btn-ghost" style={{ padding: '12px 24px' }} onClick={() => navigate('/contact')}>
-            <Icon name="mail" size={13} /> Contact concierge
-          </button>
-          <button className="btn btn-primary" style={{ padding: '12px 24px' }} onClick={() => navigate('/book')}>
-            Reserve now <Icon name="arrow_right" size={12} />
-          </button>
-        </div>
       </section>
 
     </PublicShell>

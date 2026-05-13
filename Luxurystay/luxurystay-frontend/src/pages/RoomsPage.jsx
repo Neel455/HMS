@@ -200,6 +200,65 @@ function DeleteWarningModal({ roomNumber, onConfirm, onCancel }) {
   );
 }
 
+function OccupiedWarningModal({ roomNumber, onConfirm, onCancel }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 300,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 24,
+    }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(26,24,20,0.55)' }} onClick={onCancel} />
+
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          position: 'relative', background: 'var(--paper)',
+          border: '1px solid var(--hairline)', width: '100%', maxWidth: 440,
+          padding: 0, overflow: 'hidden',
+        }}
+      >
+        <div style={{
+          background: 'var(--terracotta-soft)', borderBottom: '1px solid var(--terracotta)',
+          padding: '16px 24px', display: 'flex', alignItems: 'center', gap: 12,
+        }}>
+          <div style={{
+            width: 36, height: 36, flexShrink: 0, borderRadius: '50%',
+            background: 'var(--terracotta)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', color: 'var(--ivory)',
+          }}>
+            <Icon name="alert" size={17} />
+          </div>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--terracotta)' }}>Mark room available?</div>
+            <div style={{ fontSize: 11, color: 'var(--terracotta)', opacity: 0.8, marginTop: 1 }}>
+              Room {roomNumber} is currently occupied
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: '24px 24px 20px' }}>
+          <p style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--ink)', margin: '0 0 12px' }}>
+            This will move Room {roomNumber} from occupied to available.
+          </p>
+          <p style={{ fontSize: 13, lineHeight: 1.65, color: 'var(--ink-3)', margin: 0 }}>
+            Confirm only if the guest has checked out or the occupancy was set by mistake.
+          </p>
+        </div>
+
+        <div style={{
+          padding: '14px 24px 20px', display: 'flex',
+          justifyContent: 'flex-end', gap: 10,
+        }}>
+          <button className="btn btn-ghost" onClick={onCancel}>Keep occupied</button>
+          <button className="btn btn-primary" onClick={onConfirm}>
+            <Icon name="check" size={13} /> Mark available
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ManageModal({ room, canManage, canDelete, role, onClose, onSaved }) {
   const toast = useToast();
   const queryClient = useQueryClient();
