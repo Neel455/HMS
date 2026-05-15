@@ -2,6 +2,7 @@ const Invoice     = require('../models/Invoice');
 const Reservation = require('../models/Reservation');
 const Guest       = require('../models/Guest');
 const Room        = require('../models/Room');
+
 const { AppError }   = require('../middleware/errorHandler');
 const catchAsync     = require('../utils/catchAsync');
 const { sendSuccess } = require('../utils/apiResponse');
@@ -14,7 +15,7 @@ const populateInvoice = (query) =>
   query
     .populate('guest',       'firstName lastName email phone isVIP')
     .populate('room',        'roomNumber floor type typeLabel')
-    .populate('reservation', 'bookingId checkInDate checkOutDate nights adults children status');
+    .populate('reservation', 'bookingId checkInDate checkOutDate nights adults children status addOns');
 
 const buildPayload = (inv) => ({
   id:                 inv._id,
@@ -259,6 +260,9 @@ exports.updatePaymentStatus = catchAsync(async (req, res, next) => {
   }
 
   await invoice.save({ validateBeforeSave: true });
+
+  // Recalc guest stats whenever a payment is recorded (spend + tier may change)
+  if (invoice.guest) await Guest.recalcStats(invoice.guest).catch(() => {});
 
   const populated = await populateInvoice(Invoice.findById(invoice._id));
 

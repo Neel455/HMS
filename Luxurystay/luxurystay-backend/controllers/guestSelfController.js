@@ -27,6 +27,15 @@ const TYPE_DISPLAY = {
   penthouse:     'Penthouse',
 };
 
+const STAY_PREFERENCES = new Set([
+  'Down pillow',
+  'Espresso amenities',
+  'Daily Le Monde',
+  'Private dining',
+  'Sea-view side',
+  'No turn-down',
+]);
+
 // Resolve the Guest CRM record for the currently logged-in guest User (match by email)
 async function resolveGuest(userEmail) {
   return Guest.findOne({ email: userEmail.toLowerCase() });
@@ -47,16 +56,33 @@ exports.getMyReservations = catchAsync(async (req, res, next) => {
     .sort({ checkInDate: -1 })
     .lean();
 
+  // Mark which reservations already have feedback so FE can hide the "Rate stay" button
+  const checkedOutIds = reservations
+    .filter(r => r.status === 'checked-out')
+    .map(r => r._id);
+
+  const existingFeedback = checkedOutIds.length
+    ? await Feedback.find({ reservation: { $in: checkedOutIds } }, 'reservation').lean()
+    : [];
+  const feedbackSet = new Set(existingFeedback.map(f => String(f.reservation)));
+
   const payload = reservations.map(r => ({
-    _id:         r._id,
-    bookingId:   r.bookingId,
-    room:        r.room ? { ...r.room, number: r.room.roomNumber } : r.room,
-    checkIn:     r.checkInDate,
-    checkOut:    r.checkOutDate,
-    nights:      r.nights,
-    status:      r.status,
-    totalAmount: r.totalAmount,
-    createdAt:   r.createdAt,
+    _id:            r._id,
+    bookingId:      r.bookingId,
+    bookingContact: r.bookingContact || null,
+    room:           r.room ? { ...r.room, number: r.room.roomNumber } : r.room,
+    checkIn:        r.checkInDate,
+    checkOut:       r.checkOutDate,
+    nights:         r.nights,
+    adults:         r.adults,
+    children:       r.children,
+    status:         r.status,
+    totalAmount:    r.totalAmount,
+    depositAmount:  r.depositAmount,
+    depositPaid:    r.depositPaid,
+    specialRequests:r.specialRequests || null,
+    hasFeedback:    feedbackSet.has(String(r._id)),
+    createdAt:      r.createdAt,
   }));
 
   sendSuccess(res, 200, 'Reservations retrieved.', { reservations: payload });
@@ -65,21 +91,23 @@ exports.getMyReservations = catchAsync(async (req, res, next) => {
 /**
  * POST /api/guest/feedback
  * Allows a guest to submit feedback for one of their checked-out reservations.
- * Body: { reservationId, rating (1-5), comment }
+ * Body: { reservationId, ratings: { overall, cleanliness, service, comfort, value },
+ *         comment, npsScore }
  */
 exports.submitFeedback = catchAsync(async (req, res, next) => {
-  const { reservationId, rating, comment } = req.body;
+  const { reservationId, ratings, comment, npsScore } = req.body;
 
   if (!reservationId) return next(new AppError('Reservation ID is required.', 400));
-  if (!rating || rating < 1 || rating > 5) return next(new AppError('Rating must be between 1 and 5.', 400));
-  if (!comment?.trim()) return next(new AppError('Comment is required.', 400));
+  if (!ratings?.overall || ratings.overall < 1 || ratings.overall > 5) {
+    return next(new AppError('Overall rating (1–5) is required.', 400));
+  }
 
   const guest = await resolveGuest(req.user.email);
   if (!guest) return next(new AppError('No guest profile found for your account.', 404));
 
   const reservation = await Reservation.findOne({
-    _id: reservationId,
-    guest: guest._id,
+    _id:    reservationId,
+    guest:  guest._id,
     status: 'checked-out',
   });
   if (!reservation) {
@@ -91,11 +119,18 @@ exports.submitFeedback = catchAsync(async (req, res, next) => {
     return next(new AppError('Feedback has already been submitted for this reservation.', 400));
   }
 
+  // Build sub-ratings object — only include defined scores
+  const ratingObj = { overall: Number(ratings.overall) };
+  ['cleanliness', 'service', 'comfort', 'value'].forEach(k => {
+    if (ratings[k] != null) ratingObj[k] = Number(ratings[k]);
+  });
+
   const feedback = await Feedback.create({
     guest:       guest._id,
     reservation: reservation._id,
-    ratings:     { overall: rating },
-    comment:     comment.trim(),
+    ratings:     ratingObj,
+    comment:     comment?.trim() || null,
+    npsScore:    npsScore != null ? Number(npsScore) : null,
   });
 
   sendSuccess(res, 201, 'Feedback submitted. Thank you!', { feedback: { id: feedback._id } });
@@ -187,13 +222,13 @@ exports.getAvailableRooms = catchAsync(async (req, res, next) => {
  * Protected — guest role only.
  * Creates a pending reservation. Upserts the Guest CRM record by email.
  * Body: { checkIn, checkOut, adults, children, roomType, firstName, lastName,
- *         phone, nationality, specialRequests }
+ *         phone, nationality, specialRequests, stayPreferences }
  */
 exports.createBooking = catchAsync(async (req, res, next) => {
   const {
     checkIn, checkOut, adults = 1, children = 0,
     roomType, firstName, lastName, phone,
-    nationality, specialRequests,
+    nationality, specialRequests, stayPreferences = [],
   } = req.body;
 
   // Validate dates
@@ -234,12 +269,13 @@ exports.createBooking = catchAsync(async (req, res, next) => {
     return next(new AppError(`No ${TYPE_DISPLAY[typeEnum] || roomType} rooms available for the selected dates.`, 409));
   }
 
-  // Upsert Guest CRM record
+  // Upsert Guest CRM record — only set profile fields on first creation,
+  // never overwrite them on subsequent bookings (bookingContact holds per-booking details)
   const guest = await Guest.findOneAndUpdate(
     { email: req.user.email.toLowerCase() },
     {
-      $setOnInsert: { email: req.user.email.toLowerCase() },
-      $set: {
+      $setOnInsert: {
+        email:     req.user.email.toLowerCase(),
         firstName: firstName.trim(),
         lastName:  lastName.trim(),
         phone:     phone.trim(),
@@ -252,9 +288,19 @@ exports.createBooking = catchAsync(async (req, res, next) => {
   // Compute total
   const totalAmount    = room.rates.standard * nights;
   const depositAmount  = +(totalAmount * 0.3).toFixed(2);
+  const cleanStayPreferences = Array.isArray(stayPreferences)
+    ? stayPreferences.filter(p => STAY_PREFERENCES.has(p))
+    : [];
 
   const reservation = await Reservation.create({
     guest:            guest._id,
+    bookingContact: {
+      firstName:   firstName.trim(),
+      lastName:    lastName.trim(),
+      email:       req.user.email.toLowerCase(),
+      phone:       phone.trim(),
+      nationality: nationality?.trim() || '',
+    },
     room:             room._id,
     checkInDate,
     checkOutDate,
@@ -263,6 +309,7 @@ exports.createBooking = catchAsync(async (req, res, next) => {
     children:         Number(children),
     status:           'pending',
     source:           'online_agent',
+    stayPreferences:  cleanStayPreferences,
     specialRequests:  specialRequests?.trim() || null,
     totalAmount,
     depositAmount,
@@ -289,8 +336,9 @@ exports.createBooking = catchAsync(async (req, res, next) => {
 
   sendSuccess(res, 201, 'Booking request submitted successfully.', {
     booking: {
-      bookingId:    reservation.bookingId,
-      reservationId: reservation._id,
+      bookingId:      reservation.bookingId,
+      reservationId:  reservation._id,
+      bookingContact: reservation.bookingContact,
       guest: {
         name:  `${guest.firstName} ${guest.lastName}`,
         email: guest.email,

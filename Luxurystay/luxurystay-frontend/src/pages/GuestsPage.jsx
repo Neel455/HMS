@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -25,7 +26,7 @@ function getInitials(first = '', last = '') {
 }
 
 function fmtCurrency(val) {
-  if (val == null || val === 0) return '—';
+  if (val == null) return '—';
   return `€${Number(val).toLocaleString('en-GB', { maximumFractionDigits: 0 })}`;
 }
 
@@ -116,7 +117,7 @@ function GuestDetail({ guest, canEdit, onClose, onSaved }) {
             <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
               <TierChip tier={tier} />
               {guest.currentRoom && (
-                <span className="chip chip-occupied">In-house · {guest.currentRoom}</span>
+                <span className="chip chip-occupied">In-house · {guest.currentRoom.roomNumber ?? guest.currentRoom}</span>
               )}
             </div>
           </div>
@@ -176,7 +177,7 @@ function GuestDetail({ guest, canEdit, onClose, onSaved }) {
         <>
           {/* Stats */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-            <Stat label="Total visits"    value={guest.totalReservations ?? '—'} />
+            <Stat label="Total visits"    value={guest.totalStays ?? '—'} />
             <Stat label="Lifetime spend"  value={fmtCurrency(guest.lifetimeSpend)} />
             <Stat label="Last visit"      value={fmtDate(guest.lastStay)} />
             <Stat label="Member since"    value={fmtDate(guest.createdAt)} />
@@ -299,16 +300,20 @@ function NewGuestModal({ onClose, onSaved }) {
 export default function GuestsPage() {
   const { user }  = useAuth();
   const canEdit   = ['admin', 'manager', 'receptionist'].includes(user?.role);
+  const [searchParams] = useSearchParams();
 
-  const [search,     setSearch]     = useState('');
+  const initialSearch = searchParams.get('search') || '';
+
+  const [search,     setSearch]     = useState(initialSearch);
   const [tierFilter, setTierFilter] = useState('all');
   const [sortBy,     setSortBy]     = useState('');
   const [page,       setPage]       = useState(1);
   const [selected,   setSelected]   = useState(null);
   const [showNew,    setShowNew]     = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [syncing,    setSyncing]    = useState(false);
   const searchTimer = useRef(null);
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
 
   useEffect(() => {
     clearTimeout(searchTimer.current);
@@ -333,6 +338,20 @@ export default function GuestsPage() {
     setShowNew(false);
     setSelected(null);
     setRefreshKey(k => k + 1);
+  }
+
+  async function handleSyncStats() {
+    setSyncing(true);
+    try {
+      const res = await api.post('/api/guests/recalc-all');
+      const { updated, tierDistribution } = res.data?.data || res.data || {};
+      toast.success(`Stats synced for ${updated ?? 'all'} guests.`);
+      setRefreshKey(k => k + 1);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Sync failed.');
+    } finally {
+      setSyncing(false);
+    }
   }
 
   // Reload selected guest after edit
@@ -362,6 +381,11 @@ export default function GuestsPage() {
           <p className="sub">{total.toLocaleString()} known guests. Étoile-tier members receive priority concierge service.</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
+          <button className="btn btn-ghost" onClick={handleSyncStats} disabled={syncing}
+            title="Recalculate visits, lifetime spend, and tier for all guests">
+            <Icon name={syncing ? 'loader' : 'refresh'} size={12} />
+            {syncing ? 'Syncing…' : 'Sync stats'}
+          </button>
           {canEdit && (
             <button className="btn btn-primary" onClick={() => setShowNew(true)}>
               <Icon name="plus" size={12} />New guest
@@ -441,9 +465,9 @@ export default function GuestsPage() {
                         </td>
                         <td>{g.nationality || '—'}</td>
                         <td><TierChip tier={g.tier} /></td>
-                        <td className="numeral" style={{ fontSize: 16 }}>{g.totalReservations ?? '—'}</td>
+                        <td className="numeral" style={{ fontSize: 16 }}>{g.totalStays ?? '—'}</td>
                         <td className="numeral">{fmtCurrency(g.lifetimeSpend)}</td>
-                        <td className="numeral" style={{ fontSize: 16 }}>{g.currentRoom || '—'}</td>
+                        <td className="numeral" style={{ fontSize: 16 }}>{g.currentRoom?.roomNumber || '—'}</td>
                       </tr>
                     );
                   })}

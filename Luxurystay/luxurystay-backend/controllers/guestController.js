@@ -6,6 +6,28 @@ const { sendSuccess } = require('../utils/apiResponse');
 const { getPagination, getPaginationMeta } = require('../utils/pagination');
 const { validateObjectId } = require('../utils/objectId');
 
+// Lazy model references to avoid circular deps
+const getReservation = () => mongoose.model('Reservation');
+
+const escapeRegex = (v = '') => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function buildNameFilter(q) {
+  const re = { $regex: escapeRegex(q), $options: 'i' };
+  const conditions = [
+    { firstName: re },
+    { lastName:  re },
+    { email:     re },
+    { phone:     re },
+  ];
+  if (q.includes(' ')) {
+    const parts = q.trim().split(/\s+/);
+    const r0 = { $regex: escapeRegex(parts[0]),                  $options: 'i' };
+    const r1 = { $regex: escapeRegex(parts.slice(1).join(' ')),  $options: 'i' };
+    conditions.push({ firstName: r0, lastName: r1 }, { firstName: r1, lastName: r0 });
+  }
+  return { $or: conditions };
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const buildGuestPayload = (guest, extra = {}) => ({
@@ -72,14 +94,7 @@ exports.getAllGuests = catchAsync(async (req, res) => {
   if (tier)                  filter.tier        = tier;
   if (isVIP !== undefined)   filter.isVIP       = isVIP === 'true';
   if (nationality)           filter.nationality  = { $regex: nationality, $options: 'i' };
-  if (search) {
-    filter.$or = [
-      { firstName: { $regex: search, $options: 'i' } },
-      { lastName:  { $regex: search, $options: 'i' } },
-      { email:     { $regex: search, $options: 'i' } },
-      { phone:     { $regex: search, $options: 'i' } },
-    ];
-  }
+  if (search) Object.assign(filter, buildNameFilter(search));
 
   const sortMap = {
     newest:       { createdAt: -1 },
@@ -95,11 +110,33 @@ exports.getAllGuests = catchAsync(async (req, res) => {
     Guest.countDocuments(filter),
   ]);
 
+  // Batch-fetch active rooms so the registry table can show the "Room" column
+  const guestIds = guests.map(g => g._id);
+  let roomMap = {};
+  try {
+    const Reservation = getReservation();
+    const activeRes = await Reservation.find(
+      { guest: { $in: guestIds }, status: 'checked-in' },
+      'guest room bookingId checkInDate checkOutDate'
+    ).populate('room', 'roomNumber floor type').lean();
+
+    activeRes.forEach(r => {
+      roomMap[String(r.guest)] = {
+        roomNumber:   r.room?.roomNumber  || null,
+        floor:        r.room?.floor       || null,
+        type:         r.room?.type        || null,
+        bookingId:    r.bookingId,
+        checkInDate:  r.checkInDate,
+        checkOutDate: r.checkOutDate,
+      };
+    });
+  } catch (_) {}
+
   sendSuccess(
     res,
     200,
     'Guests retrieved.',
-    { guests: guests.map(g => buildGuestPayload(g)) },
+    { guests: guests.map(g => buildGuestPayload(g, { currentRoom: roomMap[String(g._id)] || null })) },
     getPaginationMeta(totalCount, page, limit)
   );
 });
@@ -220,15 +257,9 @@ exports.searchGuests = catchAsync(async (req, res, next) => {
 
   const { page, limit, skip } = getPagination(req.query);
 
-  const filter = {
-    $or: [
-      { firstName: { $regex: q, $options: 'i' } },
-      { lastName:  { $regex: q, $options: 'i' } },
-      { email:     { $regex: q, $options: 'i' } },
-      { phone:     { $regex: q, $options: 'i' } },
-      { idNumber:  { $regex: q, $options: 'i' } },
-    ],
-  };
+  const base   = buildNameFilter(q);
+  const idRe   = { $regex: escapeRegex(q), $options: 'i' };
+  const filter = { $or: [...base.$or, { idNumber: idRe }] };
 
   const [guests, totalCount] = await Promise.all([
     Guest.find(filter).sort({ lastName: 1, firstName: 1 }).skip(skip).limit(limit),
@@ -242,4 +273,48 @@ exports.searchGuests = catchAsync(async (req, res, next) => {
     { guests: guests.map(g => buildGuestPayload(g)) },
     getPaginationMeta(totalCount, page, limit)
   );
+});
+
+/**
+ * POST /api/guests/:id/recalc
+ * Manually recalculate totalStays, lifetimeSpend, and tier for a single guest.
+ * Useful after data corrections or bulk imports.
+ * Access: admin, manager, receptionist
+ */
+exports.recalcGuestStats = catchAsync(async (req, res, next) => {
+  validateObjectId(req.params.id, 'Guest ID');
+
+  const guest = await Guest.recalcStats(req.params.id);
+  if (!guest) return next(new AppError('Guest not found.', 404));
+
+  sendSuccess(res, 200, `Stats recalculated for ${guest.firstName} ${guest.lastName}.`, {
+    guest: buildGuestPayload(guest),
+  });
+});
+
+/**
+ * POST /api/guests/recalc-all
+ * Recalculate stats for every guest. Admin / manager only.
+ * Returns a summary of how many guests were updated and tier distribution.
+ */
+exports.recalcAllGuests = catchAsync(async (req, res) => {
+  const guests = await Guest.find({}, '_id').lean();
+
+  let updated = 0;
+  const tierCounts = { none: 0, argent: 0, or: 0, etoile: 0 };
+
+  // Process in small batches to avoid overwhelming MongoDB
+  const BATCH = 20;
+  for (let i = 0; i < guests.length; i += BATCH) {
+    const batch = guests.slice(i, i + BATCH);
+    const results = await Promise.all(batch.map(g => Guest.recalcStats(g._id).catch(() => null)));
+    results.forEach(g => {
+      if (g) { updated++; tierCounts[g.tier] = (tierCounts[g.tier] || 0) + 1; }
+    });
+  }
+
+  sendSuccess(res, 200, `Recalculated stats for ${updated} guests.`, {
+    updated,
+    tierDistribution: tierCounts,
+  });
 });

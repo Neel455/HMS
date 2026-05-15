@@ -56,8 +56,11 @@ export default function ConfirmationPage() {
     );
   }
 
-  // Derived values
-  const guestFirst   = booking.guest?.name?.split(' ')[0] || 'dear guest';
+  // Prefer bookingContact (per-booking snapshot) over the live guest profile name
+  const contactName  = booking.bookingContact
+    ? `${booking.bookingContact.firstName} ${booking.bookingContact.lastName}`.trim()
+    : booking.guest?.name || '';
+  const guestFirst   = booking.bookingContact?.firstName || booking.guest?.name?.split(' ')[0] || 'dear guest';
   const arrivalMonth = booking.checkIn
     ? new Date(booking.checkIn + 'T00:00:00').toLocaleDateString('en-GB', { month: 'long' })
     : 'soon';
@@ -167,7 +170,7 @@ export default function ConfirmationPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 32 }}>
               <ConfirmRow
                 l="Guest"
-                v={booking.guest?.name}
+                v={contactName}
               />
               <ConfirmRow
                 l="Suite"

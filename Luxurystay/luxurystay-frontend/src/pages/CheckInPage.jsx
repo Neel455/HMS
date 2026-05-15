@@ -1,9 +1,10 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useApi } from '../hooks/useApi';
 import { useToast } from '../context/ToastContext';
 import api from '../lib/api';
 import Icon from '../components/Icon';
 import Spinner from '../components/Spinner';
+import MetricTile from '../components/MetricTile';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -31,16 +32,25 @@ function addDaysInput(iso, days) {
   return d.toISOString().slice(0, 10);
 }
 
+const ARRIVAL_PREFERENCES = ['Down pillow', 'Espresso amenities', 'Daily Le Monde', 'Private dining', 'Sea-view side', 'No turn-down'];
+
+function checklistFromPreferences(preferences = []) {
+  const selected = new Set(preferences);
+  return ARRIVAL_PREFERENCES.reduce((acc, preference) => {
+    acc[preference] = selected.has(preference);
+    return acc;
+  }, {});
+}
+
+function notesForMode(reservation, isArrival) {
+  return isArrival
+    ? reservation.specialRequests || reservation.notes || ''
+    : reservation.notes || reservation.specialRequests || '';
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function Mini({ label, value }) {
-  return (
-    <div className="metric" style={{ borderRight: 'none', borderBottom: 'none', borderTop: 'none', borderLeft: 'none' }}>
-      <div className="label">{label}</div>
-      <div className="val numeral">{value ?? '—'}</div>
-    </div>
-  );
-}
+
 
 function SummaryRow({ label, value }) {
   return (
@@ -90,22 +100,22 @@ function CheckInList({ list, mode, onSelect, loading }) {
 
   const summary = isArrival
     ? [
-        { l: 'Expected today',  v: list.filter(r => ['pending','confirmed'].includes(r.status)).length },
-        { l: 'Checked in',      v: list.filter(r => r.status === 'checked-in').length },
-        { l: 'VIP arrivals',    v: list.filter(r => r.guest?.isVIP || r.guest?.tier === 'etoile').length },
-        { l: 'Avg. stay',       v: list.length ? `${(list.reduce((a, b) => a + (b.nights || 0), 0) / list.length).toFixed(1)} nts` : '—' },
+        { label: 'Expected today',  value: list.filter(r => ['pending','confirmed'].includes(r.status)).length },
+        { label: 'Checked in',      value: list.filter(r => r.status === 'checked-in').length },
+        { label: 'VIP arrivals',    value: list.filter(r => r.guest?.isVIP || r.guest?.tier === 'etoile').length },
+        { label: 'Avg. stay',       value: list.length ? `${(list.reduce((a, b) => a + (b.nights || 0), 0) / list.length).toFixed(1)} nts` : '—' },
       ]
     : [
-        { l: 'Departing today', v: list.length },
-        { l: 'Still in-room',   v: list.filter(r => r.status === 'checked-in').length },
-        { l: 'Checked out',     v: list.filter(r => r.status === 'checked-out').length },
-        { l: 'Folios open',     v: list.filter(r => r.status === 'checked-in').length },
+        { label: 'Departing today', value: list.length },
+        { label: 'Still in-room',   value: list.filter(r => r.status === 'checked-in').length },
+        { label: 'Checked out',     value: list.filter(r => r.status === 'checked-out').length },
+        { label: 'Folios open',     value: list.filter(r => r.status === 'checked-in').length },
       ];
 
   return (
     <>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--hairline)', border: '1px solid var(--hairline)', marginBottom: 28 }}>
-        {summary.map((s, i) => <Mini key={i} label={s.l} value={s.v} />)}
+        {summary.map((summary, i) => <MetricTile key={i} label={summary.label} value={summary.value} />)}
       </div>
 
       <div className="t-wrap">
@@ -190,8 +200,8 @@ function CheckInDetail({ reservation, mode, onBack, onDone, onUpdated }) {
   const toast = useToast();
   const isArrival = mode === 'checkin';
 
-  const [checklist, setChecklist] = useState({});
-  const [notes, setNotes]         = useState('');
+  const [checklist, setChecklist] = useState(() => checklistFromPreferences(reservation.stayPreferences));
+  const [notes, setNotes]         = useState(() => notesForMode(reservation, isArrival));
   const [loading, setLoading]     = useState(false);
   const [checkoutSaving, setCheckoutSaving] = useState(false);
   const [checkOutDate, setCheckOutDate] = useState(toDateInputValue(reservation.checkOutDate));
@@ -209,7 +219,12 @@ function CheckInDetail({ reservation, mode, onBack, onDone, onUpdated }) {
   const minCheckOutDate = addDaysInput(r.checkInDate, 1);
   const checkoutDateChanged = isArrival && checkOutDate !== currentCheckOutDate;
 
-  const arrivalItems   = ['Down pillow', 'Espresso amenities', 'Daily Le Monde', 'Private dining', 'Sea-view side', 'No turn-down'];
+  useEffect(() => {
+    setChecklist(checklistFromPreferences(reservation.stayPreferences));
+    setNotes(notesForMode(reservation, isArrival));
+  }, [reservation, isArrival]);
+
+  const arrivalItems   = ARRIVAL_PREFERENCES;
   const departureItems = ['Mini-bar verified', 'Safe emptied', 'Keys returned', 'Damage assessment', 'Lost & found cleared', 'Transfer dispatched'];
   const checklistItems = isArrival ? arrivalItems : departureItems;
 
@@ -221,7 +236,7 @@ function CheckInDetail({ reservation, mode, onBack, onDone, onUpdated }) {
     setLoading(true);
     try {
       const endpoint = isArrival ? `/api/reservations/${r.id}/checkin` : `/api/reservations/${r.id}/checkout`;
-      await api.patch(endpoint, { notes });
+      await api.patch(endpoint);
       toast.success(isArrival ? `${firstName} checked in to room ${r.room?.roomNumber}.` : `${fullName} checked out successfully.`);
       onDone();
     } catch (err) {
@@ -337,8 +352,8 @@ function CheckInDetail({ reservation, mode, onBack, onDone, onUpdated }) {
                 <div className="eyebrow" style={{ marginBottom: 14 }}>Stay preferences</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 28 }}>
                   {checklistItems.map((p, i) => (
-                    <label key={i} onClick={() => setChecklist(c => ({ ...c, [p]: !c[p] }))}
-                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--hairline)', borderRadius: 2, fontSize: 12, cursor: 'pointer', background: checklist[p] ? 'var(--linen)' : 'transparent' }}>
+                    <label key={i}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--hairline)', borderRadius: 2, fontSize: 12, cursor: 'default', background: checklist[p] ? 'var(--linen)' : 'transparent', color: checklist[p] ? 'var(--ink)' : 'var(--mute)' }}>
                       <span style={{ width: 14, height: 14, border: '1px solid var(--ink-3)', borderRadius: 2, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: checklist[p] ? 'var(--ink)' : 'transparent' }}>
                         {checklist[p] && <Icon name="check" size={10} style={{ color: 'var(--paper)' }} />}
                       </span>
@@ -375,9 +390,9 @@ function CheckInDetail({ reservation, mode, onBack, onDone, onUpdated }) {
             {/* Notes */}
             <div className="field" style={{ marginBottom: 28 }}>
               <label>Staff notes</label>
-              <textarea value={notes} onChange={e => setNotes(e.target.value)}
+              <textarea value={notes} readOnly
                 placeholder="Any notes for handover…"
-                style={{ minHeight: 72, resize: 'vertical' }} />
+                style={{ minHeight: 72, resize: 'vertical', cursor: 'default', color: notes ? 'var(--ink)' : 'var(--mute)' }} />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

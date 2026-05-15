@@ -12,6 +12,7 @@ const { validateObjectId } = require('../utils/objectId');
 const buildPayload = (r) => ({
   id:                   r._id,
   bookingId:            r.bookingId,
+  bookingContact:       r.bookingContact || null,
   guest:                r.guest,
   room:                 r.room,
   checkInDate:          r.checkInDate,
@@ -40,6 +41,8 @@ const buildPayload = (r) => ({
   createdAt:            r.createdAt,
   updatedAt:            r.updatedAt,
 });
+
+const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Check for overlapping reservations on a room, optionally excluding a reservation ID
 const checkRoomAvailability = async (roomId, checkInDate, checkOutDate, excludeId = null) => {
@@ -156,14 +159,17 @@ exports.createReservation = catchAsync(async (req, res, next) => {
 /**
  * GET /api/reservations
  * Access: admin, manager, receptionist
- * Supports ?status=&guestId=&roomId=&source=&checkInFrom=&checkInTo=&page=&limit=&sort=
+ * Supports ?status=&guestId=&roomId=&source=&checkInFrom=&checkInTo=&search=&page=&limit=&sort=
  */
 exports.getAllReservations = catchAsync(async (req, res) => {
   const { page, limit, skip } = getPagination(req.query);
-  const { status, guestId, roomId, source, checkInFrom, checkInTo, sort } = req.query;
+  const { status, guestId, roomId, source, checkInFrom, checkInTo, search, sort } = req.query;
 
   const filter = {};
-  if (status)      filter.status = status;
+  if (status) {
+    const statuses = String(status).split(',').map(s => s.trim()).filter(Boolean);
+    if (statuses.length) filter.status = statuses.length > 1 ? { $in: statuses } : statuses[0];
+  }
   if (source)      filter.source = source;
   if (guestId)     { validateObjectId(guestId, 'Guest ID'); filter.guest = guestId; }
   if (roomId)      { validateObjectId(roomId,  'Room ID');  filter.room  = roomId; }
@@ -171,6 +177,45 @@ exports.getAllReservations = catchAsync(async (req, res) => {
     filter.checkInDate = {};
     if (checkInFrom) filter.checkInDate.$gte = new Date(checkInFrom);
     if (checkInTo)   filter.checkInDate.$lte = new Date(checkInTo);
+  }
+  if (search?.trim()) {
+    const q = search.trim();
+    const re = new RegExp(escapeRegex(q), 'i');
+
+    // Build full-name conditions when query contains a space (e.g. "test test")
+    const namePairs = [];
+    if (q.includes(' ')) {
+      const parts = q.split(/\s+/);
+      const r0 = new RegExp(escapeRegex(parts[0]), 'i');
+      const r1 = new RegExp(escapeRegex(parts.slice(1).join(' ')), 'i');
+      namePairs.push(
+        { firstName: r0, lastName: r1 },
+        { firstName: r1, lastName: r0 },
+      );
+    }
+
+    const guests = await Guest.find({
+      $or: [
+        { firstName: re },
+        { lastName: re },
+        { email: re },
+        { phone: re },
+        ...namePairs,
+      ],
+    }).select('_id').lean();
+
+    filter.$or = [
+      { bookingId: re },
+      { 'bookingContact.firstName': re },
+      { 'bookingContact.lastName': re },
+      { 'bookingContact.email': re },
+      { 'bookingContact.phone': re },
+      ...(namePairs.map(p => ({
+        'bookingContact.firstName': p.firstName,
+        'bookingContact.lastName':  p.lastName,
+      }))),
+      ...(guests.length ? [{ guest: { $in: guests.map(g => g._id) } }] : []),
+    ];
   }
 
   const sortMap = {

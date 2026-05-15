@@ -32,6 +32,10 @@ function toISO(year, month, day) {
   return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
 }
 
+function asText(value) {
+  return value == null ? '' : String(value);
+}
+
 const STEP_TITLES = [
   {
     eyebrow: 'Step I · When',
@@ -53,6 +57,15 @@ const STEP_TITLES = [
     h: <>Review <em>&amp; reserve.</em></>,
     sub: 'A 30% deposit secures the booking. The balance is settled on departure, with no surprises.',
   },
+];
+
+const STAY_PREFERENCES = [
+  'Down pillow',
+  'Espresso amenities',
+  'Daily Le Monde',
+  'Private dining',
+  'Sea-view side',
+  'No turn-down',
 ];
 
 const CTA_LABELS  = ['Choose suite', 'Continue to guest', 'Continue to review', 'Reserve & pay deposit'];
@@ -108,7 +121,7 @@ function StepIndicator({ step }) {
 
 // ─── Folio Rail ──────────────────────────────────────────────────────────────
 
-function FolioRail({ suite, nights, subtotal, tax, total, cancelBy, onContinue, ctaLabel, canContinue }) {
+function FolioRail({ suite, nights, subtotal, tax, total, cancelBy, onContinue, ctaLabel, canContinue, submitting = false }) {
   const spaFree = nights >= 3;
   return (
     <div style={{ position: 'sticky', top: 110, alignSelf: 'start' }}>
@@ -166,11 +179,11 @@ function FolioRail({ suite, nights, subtotal, tax, total, cancelBy, onContinue, 
 
           <button
             className="btn btn-primary"
-            disabled={!canContinue}
+            disabled={submitting}
             style={{
               width: '100%', justifyContent: 'center',
               padding: 16, marginTop: 20,
-              opacity: canContinue ? 1 : 0.5,
+              opacity: canContinue && !submitting ? 1 : 0.5,
             }}
             onClick={onContinue}
           >
@@ -562,13 +575,41 @@ function StepSuite({ dates, selectedSuite, onSelect }) {
 
 // ─── Step 3 — Guest details ───────────────────────────────────────────────────
 
-function StepDetails({ details, onChange }) {
+function StepDetails({ details, onChange, missingFields = [] }) {
+  const missing = new Set(missingFields);
+  const selectedPreferences = details.stayPreferences || [];
+
+  function togglePreference(preference) {
+    onChange(
+      'stayPreferences',
+      selectedPreferences.includes(preference)
+        ? selectedPreferences.filter(p => p !== preference)
+        : [...selectedPreferences, preference]
+    );
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
 
       {/* Primary guest */}
       <div className="card" style={{ padding: 32 }}>
         <div className="eyebrow" style={{ marginBottom: 20 }}>Primary guest</div>
+        {missingFields.length > 0 && (
+          <div style={{
+            background: 'var(--terracotta-soft)',
+            border: '1px solid var(--terracotta)',
+            color: 'var(--terracotta)',
+            padding: '10px 14px',
+            fontSize: 12,
+            marginBottom: 18,
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+          }}>
+            <Icon name="alert" size={12} />
+            Complete {missingFields.join(', ')} to continue.
+          </div>
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
           <div className="field">
             <label>First name <span style={{ color: 'var(--terracotta)' }}>*</span></label>
@@ -576,6 +617,7 @@ function StepDetails({ details, onChange }) {
               value={details.firstName}
               onChange={e => onChange('firstName', e.target.value)}
               placeholder="Your given name"
+              style={missing.has('first name') ? { borderColor: 'var(--terracotta)' } : undefined}
             />
           </div>
           <div className="field">
@@ -584,6 +626,7 @@ function StepDetails({ details, onChange }) {
               value={details.lastName}
               onChange={e => onChange('lastName', e.target.value)}
               placeholder="Family name"
+              style={missing.has('last name') ? { borderColor: 'var(--terracotta)' } : undefined}
             />
           </div>
           <div className="field">
@@ -593,6 +636,7 @@ function StepDetails({ details, onChange }) {
               value={details.phone}
               onChange={e => onChange('phone', e.target.value)}
               placeholder="+33 6 12 34 56 78"
+              style={missing.has('mobile') ? { borderColor: 'var(--terracotta)' } : undefined}
             />
           </div>
           <div className="field">
@@ -613,48 +657,33 @@ function StepDetails({ details, onChange }) {
       <div className="card" style={{ padding: 32 }}>
         <div className="eyebrow" style={{ marginBottom: 20 }}>Preferences</div>
 
-        <div className="label" style={{ marginBottom: 10 }}>Bedding</div>
-        <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
-          {['King', 'Twin', 'Connecting'].map(b => (
-            <button
-              key={b}
-              onClick={() => onChange('bed', b)}
-              style={{
-                padding: '12px 22px',
-                border: `1px solid ${details.bed === b ? 'var(--ink)' : 'var(--hairline)'}`,
-                background: details.bed === b ? 'var(--ink)' : 'transparent',
-                color: details.bed === b ? 'var(--paper)' : 'var(--ink)',
-                fontFamily: 'var(--serif)', fontStyle: 'italic', fontSize: 15, cursor: 'pointer',
-              }}
-            >
-              {b}
-            </button>
-          ))}
-        </div>
-
-        <div className="label" style={{ marginBottom: 10 }}>Occasion</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 24 }}>
-          {[
-            { id: 'None',        i: 'leaf'  },
-            { id: 'Honeymoon',   i: 'crown' },
-            { id: 'Anniversary', i: 'star'  },
-            { id: 'Birthday',    i: 'spa'   },
-          ].map(o => (
-            <button
-              key={o.id}
-              onClick={() => onChange('occasion', o.id)}
-              style={{
-                padding: '16px 14px',
-                border: `1px solid ${details.occasion === o.id ? 'var(--brass)' : 'var(--hairline)'}`,
-                background: details.occasion === o.id ? 'var(--linen)' : 'transparent',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                fontSize: 12, fontFamily: 'var(--serif)', cursor: 'pointer',
-              }}
-            >
-              <Icon name={o.i} size={18} style={{ color: 'var(--brass-deep)' }} />
-              {o.id}
-            </button>
-          ))}
+        <div className="label" style={{ marginBottom: 10 }}>Stay preferences</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 24 }}>
+          {STAY_PREFERENCES.map(p => {
+            const checked = selectedPreferences.includes(p);
+            return (
+              <label
+                key={p}
+                onClick={() => togglePreference(p)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '12px 14px', border: '1px solid var(--hairline)',
+                  borderRadius: 2, fontSize: 13, cursor: 'pointer',
+                  background: checked ? 'var(--linen)' : 'transparent',
+                }}
+              >
+                <span style={{
+                  width: 16, height: 16, border: '1px solid var(--ink-3)',
+                  borderRadius: 2, flexShrink: 0, display: 'flex',
+                  alignItems: 'center', justifyContent: 'center',
+                  background: checked ? 'var(--ink)' : 'transparent',
+                }}>
+                  {checked && <Icon name="check" size={10} style={{ color: 'var(--paper)' }} />}
+                </span>
+                {p}
+              </label>
+            );
+          })}
         </div>
 
         <div className="field">
@@ -719,7 +748,6 @@ function StepReview({ dates, selectedSuite, details, total, onChange }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
           <ReviewRow l="Guest"     v={`${details.firstName} ${details.lastName}`.trim()} />
           <ReviewRow l="Suite"     v={selectedSuite?.name} />
-          <ReviewRow l="Bed"       v={details.bed || 'King'} />
           <ReviewRow l="Arrival"   v={fmtDate(dates.checkIn)} />
           <ReviewRow l="Departure" v={fmtDate(dates.checkOut)} />
           <ReviewRow l="Nights"    v={String(nights)} />
@@ -727,7 +755,7 @@ function StepReview({ dates, selectedSuite, details, total, onChange }) {
             l="Guests"
             v={`${dates.adults} adult${dates.adults > 1 ? 's' : ''}${dates.children ? `, ${dates.children} child${dates.children > 1 ? 'ren' : ''}` : ''}`}
           />
-          <ReviewRow l="Occasion"  v={details.occasion || 'None'} />
+          <ReviewRow l="Preferences" v={(details.stayPreferences || []).join(', ')} />
           <ReviewRow l="Notes"     v={details.specialRequests} />
         </div>
       </div>
@@ -835,13 +863,12 @@ export default function GuestBookPage() {
   );
 
   const [details, setDetails] = useState({
-    firstName:       user?.name?.split(' ')[0]             || '',
-    lastName:        user?.name?.split(' ').slice(1).join(' ') || '',
-    phone:           user?.phone || '',
+    firstName:       asText(user?.name).split(' ')[0]             || '',
+    lastName:        asText(user?.name).split(' ').slice(1).join(' ') || '',
+    phone:           asText(user?.phone),
     nationality:     '',
     specialRequests: '',
-    bed:             'King',
-    occasion:        'None',
+    stayPreferences: [],
     card:            '',
     expiry:          '',
     cvv:             '',
@@ -875,11 +902,22 @@ export default function GuestBookPage() {
     return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   })();
 
+  const missingGuestFields = [
+    !asText(details.firstName).trim() && 'first name',
+    !asText(details.lastName).trim() && 'last name',
+    !asText(details.phone).trim() && 'mobile',
+  ].filter(Boolean);
+
+  const missingPaymentFields = [
+    !asText(details.card).trim() && 'card number',
+    !details.accepted && 'house terms',
+  ].filter(Boolean);
+
   const canContinue = [
     !!(dates.checkIn && dates.checkOut && nights > 0),
     selectedSuite !== null,
-    !!(details.firstName.trim() && details.lastName.trim() && details.phone.trim()),
-    !!(details.accepted && details.card.trim()),
+    missingGuestFields.length === 0,
+    missingPaymentFields.length === 0,
   ][step];
 
   const ctaLabel = CTA_LABELS[step];
@@ -899,11 +937,12 @@ export default function GuestBookPage() {
         adults:          dates.adults,
         children:        dates.children,
         roomType:        selectedSuite.name,
-        firstName:       details.firstName.trim(),
-        lastName:        details.lastName.trim(),
-        phone:           details.phone.trim(),
-        nationality:     details.nationality.trim(),
-        specialRequests: details.specialRequests.trim(),
+        firstName:       asText(details.firstName).trim(),
+        lastName:        asText(details.lastName).trim(),
+        phone:           asText(details.phone).trim(),
+        nationality:     asText(details.nationality).trim(),
+        specialRequests: asText(details.specialRequests).trim(),
+        stayPreferences: details.stayPreferences || [],
       });
       queryClient.invalidateQueries({ queryKey: ['/api/guest/reservations'] });
       navigate('/confirm', { state: { booking: data.data.booking }, replace: true });
@@ -915,6 +954,16 @@ export default function GuestBookPage() {
   }
 
   function handleContinue() {
+    if (!canContinue) {
+      const messages = [
+        'Choose arrival and departure dates.',
+        'Select an available suite.',
+        `Complete ${missingGuestFields.join(', ')}.`,
+        `Complete ${missingPaymentFields.join(', ')}.`,
+      ];
+      toast.error(messages[step] || 'Complete this step to continue.');
+      return;
+    }
     if (step === 3) handleSubmit();
     else setStep(s => s + 1);
   }
@@ -946,7 +995,7 @@ export default function GuestBookPage() {
               <StepSuite dates={dates} selectedSuite={selectedSuite} onSelect={setSelectedSuite} />
             )}
             {step === 2 && (
-              <StepDetails details={details} onChange={updateDetail} />
+              <StepDetails details={details} onChange={updateDetail} missingFields={missingGuestFields} />
             )}
             {step === 3 && (
               <StepReview
@@ -970,7 +1019,7 @@ export default function GuestBookPage() {
               ) : <span />}
               <button
                 className="btn btn-primary"
-                disabled={!canContinue || submitting}
+                disabled={submitting}
                 style={{ opacity: canContinue && !submitting ? 1 : 0.5 }}
                 onClick={handleContinue}
               >
@@ -992,7 +1041,8 @@ export default function GuestBookPage() {
             cancelBy={cancelBy}
             onContinue={handleContinue}
             ctaLabel={submittingCta ? 'Confirming…' : ctaLabel}
-            canContinue={canContinue && !submitting}
+            canContinue={canContinue}
+            submitting={submitting}
           />
 
         </div>

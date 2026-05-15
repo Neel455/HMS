@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 
 const guestController = require('../controllers/guestController');
+
 const { protect }     = require('../middleware/auth');
 const { authorize }   = require('../middleware/rbac');
 const validate        = require('../middleware/validate');
@@ -17,13 +18,19 @@ const ADMIN_MGR    = ['admin', 'manager'];
 // All routes require authentication
 router.use(protect);
 
-// ─── Search (before /:id to avoid param collision) ────────────────────────────
+// ─── Search & bulk ops (before /:id to avoid param collision) ────────────────
 router.get(
   '/search',
   authorize(...VIEWER_ROLES),
   searchGuestValidator,
   validate,
   guestController.searchGuests
+);
+
+router.post(
+  '/recalc-all',
+  authorize(...ADMIN_MGR),
+  guestController.recalcAllGuests
 );
 
 // ─── Collection ───────────────────────────────────────────────────────────────
@@ -38,5 +45,7 @@ router
   .get(authorize(...VIEWER_ROLES), guestController.getGuestById)
   .patch(authorize(...VIEWER_ROLES), updateGuestValidator, validate, guestController.updateGuest)
   .delete(authorize(...ADMIN_MGR), guestController.deleteGuest);
+
+router.post('/:id/recalc', authorize(...VIEWER_ROLES), guestController.recalcGuestStats);
 
 module.exports = router;

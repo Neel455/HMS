@@ -1,13 +1,13 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '../context/AuthContext';
-import { useApi } from '../hooks/useApi';
-import { useToast } from '../context/ToastContext';
-import api from '../lib/api';
-import Icon from '../components/Icon';
-import Photo from '../components/Photo';
-import PublicShell from '../layouts/PublicShell';
+import { useAuth } from '../../context/AuthContext';
+import { useApi } from '../../hooks/useApi';
+import { useToast } from '../../context/ToastContext';
+import api from '../../lib/api';
+import Icon from '../../components/Icon';
+import Photo from '../../components/Photo';
+import PublicShell from '../../layouts/PublicShell';
 
 // ─── History panel ────────────────────────────────────────────────────────────
 
@@ -416,6 +416,158 @@ function CancelConfirmModal({ onConfirm, onCancel }) {
   );
 }
 
+// ─── Feedback modal ───────────────────────────────────────────────────────────
+
+const RATE_CATEGORIES = [
+  { key: 'cleanliness', label: 'Cleanliness' },
+  { key: 'service',     label: 'Service'     },
+  { key: 'comfort',     label: 'Comfort'     },
+  { key: 'value',       label: 'Value'       },
+];
+
+function StarRow({ label, value, onChange, required }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--hairline-2)' }}>
+      <span style={{ fontSize: 13, fontWeight: 500 }}>
+        {label}{required && <span style={{ color: 'var(--terracotta)', marginLeft: 2 }}>*</span>}
+      </span>
+      <div style={{ display: 'flex', gap: 4 }}>
+        {[1,2,3,4,5].map(n => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => onChange(n)}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: '2px 3px', fontSize: 22, lineHeight: 1,
+              color: n <= (value || 0) ? 'var(--brass-deep)' : 'var(--hairline)',
+              transition: 'color 0.1s',
+            }}
+          >★</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FeedbackModal({ reservation: r, onClose, onSubmitted }) {
+  const toast    = useToast();
+  const [ratings, setRatings]   = useState({ overall: 0, cleanliness: 0, service: 0, comfort: 0, value: 0 });
+  const [nps,     setNps]       = useState(null);
+  const [comment, setComment]   = useState('');
+  const [saving,  setSaving]    = useState(false);
+
+  const label = TYPE_LABEL[r.room?.type] || r.room?.type || 'Suite';
+
+  function setRating(key, val) {
+    setRatings(prev => ({ ...prev, [key]: prev[key] === val ? 0 : val }));
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!ratings.overall) { toast.error('Please give an overall rating.'); return; }
+    setSaving(true);
+    try {
+      const payload = {
+        reservationId: r._id,
+        ratings: {
+          overall:     ratings.overall,
+          ...(ratings.cleanliness && { cleanliness: ratings.cleanliness }),
+          ...(ratings.service     && { service:     ratings.service     }),
+          ...(ratings.comfort     && { comfort:     ratings.comfort     }),
+          ...(ratings.value       && { value:       ratings.value       }),
+        },
+        comment:  comment.trim() || undefined,
+        npsScore: nps,
+      };
+      await api.post('/api/guest/feedback', payload);
+      toast.success('Thank you for your feedback!');
+      onSubmitted();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not submit feedback.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 24 }} onClick={onClose}>
+      <div style={{ background: 'var(--paper)', maxWidth: 500, width: '100%', border: '1px solid var(--hairline)', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div style={{ padding: '24px 28px 16px', borderBottom: '1px solid var(--hairline)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div className="eyebrow" style={{ marginBottom: 4 }}>Share your experience</div>
+            <h3 className="display" style={{ fontSize: 26, margin: 0 }}>Rate your <em>stay.</em></h3>
+            <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 6, fontWeight: 500 }}>{label} · {fmtDate(r.checkIn)} – {fmtDate(r.checkOut)}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: '1px solid var(--hairline)', cursor: 'pointer', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)', flexShrink: 0 }}>
+            <Icon name="x" size={14} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div style={{ padding: '20px 28px' }}>
+            {/* Star ratings */}
+            <div style={{ marginBottom: 20 }}>
+              <StarRow label="Overall rating" value={ratings.overall} onChange={v => setRating('overall', v)} required />
+              {RATE_CATEGORIES.map(c => (
+                <StarRow key={c.key} label={c.label} value={ratings[c.key]} onChange={v => setRating(c.key, v)} />
+              ))}
+            </div>
+
+            {/* NPS */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
+                How likely are you to recommend us? <span style={{ color: 'var(--mute)', fontWeight: 500 }}>(optional)</span>
+              </div>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {[0,1,2,3,4,5,6,7,8,9,10].map(n => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setNps(nps === n ? null : n)}
+                    style={{
+                      width: 36, height: 36, border: nps === n ? '2px solid var(--brass-deep)' : '1px solid var(--hairline)',
+                      background: nps === n ? 'var(--brass-deep)' : 'var(--paper)',
+                      color: nps === n ? 'var(--ivory)' : 'var(--ink)',
+                      cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                    }}
+                  >{n}</button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--mute)', marginTop: 6, fontWeight: 500 }}>
+                <span>Not at all likely</span><span>Extremely likely</span>
+              </div>
+            </div>
+
+            {/* Comment */}
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Your comments <span style={{ color: 'var(--mute)', fontWeight: 400 }}>(optional)</span></label>
+              <textarea
+                rows={4}
+                value={comment}
+                onChange={e => setComment(e.target.value)}
+                placeholder="What did you enjoy most? Any suggestions for us…"
+                style={{ resize: 'vertical' }}
+              />
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div style={{ padding: '16px 28px', borderTop: '1px solid var(--hairline)', display: 'flex', gap: 10 }}>
+            <button type="submit" className="btn btn-primary" style={{ flex: 1, justifyContent: 'center', opacity: saving ? 0.7 : 1 }} disabled={saving || !ratings.overall}>
+              {saving
+                ? <><div className="spinner" style={{ width: 13, height: 13, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Submitting…</>
+                : <>Submit feedback <Icon name="arrow_right" size={12} /></>}
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={onClose} style={{ flex: 1, justifyContent: 'center' }}>Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function GuestPortalPage() {
@@ -431,13 +583,15 @@ export default function GuestPortalPage() {
   const [cancelTarget,      setCancelTarget]      = useState(null);
   const [detailReservation, setDetailReservation] = useState(null);
   const [showHistory,       setShowHistory]       = useState(false);
+  const [feedbackTarget,    setFeedbackTarget]    = useState(null);
 
   const { data: resData, loading: resLoading } = useApi('/api/guest/reservations');
   const reservations = resData?.reservations ?? [];
 
-  const activeStays  = reservations.filter(r => r.status === 'checked-in').sort((a, b) => new Date(a.checkIn) - new Date(b.checkIn));
+  const activeStays   = reservations.filter(r => r.status === 'checked-in').sort((a, b) => new Date(a.checkIn) - new Date(b.checkIn));
   const upcomingStays = reservations.filter(r => ['confirmed', 'pending'].includes(r.status)).sort((a, b) => new Date(a.checkIn) - new Date(b.checkIn));
-  const displayStays = [...activeStays, ...upcomingStays];
+  const pastStays     = reservations.filter(r => r.status === 'checked-out').sort((a, b) => new Date(b.checkOut) - new Date(a.checkOut));
+  const displayStays  = [...activeStays, ...upcomingStays];
   const activeStay   = activeStays[0] || null;
   const safeIndex    = Math.min(displayIndex, Math.max(displayStays.length - 1, 0));
   const displayStay  = displayStays[safeIndex] || null;
@@ -486,6 +640,11 @@ export default function GuestPortalPage() {
     }
   }, [toast]);
 
+  const handleFeedbackSubmitted = useCallback(() => {
+    setFeedbackTarget(null);
+    queryClient.invalidateQueries({ queryKey: ['/api/guest/reservations'] });
+  }, [queryClient]);
+
   // ── Derived display values ─────────────────────────────────────────────────
 
   const suiteTone  = SLUG_TONES[displayStay?.room?.type] || 'warm';
@@ -528,6 +687,7 @@ export default function GuestPortalPage() {
       {/* ── Modals ──────────────────────────────────────────────────────── */}
       {serviceModal && <ServiceModal service={serviceModal} onClose={() => setServiceModal(null)} onSubmit={handleServiceSubmit} />}
       {maintModal   && <MaintenanceModal onClose={() => setMaintModal(false)} onSubmit={handleMaintSubmit} />}
+      {feedbackTarget && <FeedbackModal reservation={feedbackTarget} onClose={() => setFeedbackTarget(null)} onSubmitted={handleFeedbackSubmitted} />}
       {detailReservation && (
         <ReservationDetailPanel
           reservation={detailReservation}
@@ -708,7 +868,7 @@ export default function GuestPortalPage() {
                 </p>
               )}
 
-              {/* Reservations list */}
+              {/* Upcoming reservations list */}
               <div>
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 16 }}>
                   <h2 className="display" style={{ fontSize: 32, margin: 0 }}>My <em>reservations.</em></h2>
@@ -720,19 +880,19 @@ export default function GuestPortalPage() {
                 </div>
                 {resLoading && (
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--mute)', fontSize: 13 }}>
-                    <div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5 }} /> Loading reservations…
+                    <div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5 }} /> Loading…
                   </div>
                 )}
-                {!resLoading && reservations.length === 0 && (
+                {!resLoading && displayStays.length === 0 && (
                   <div style={{ border: '1px solid var(--hairline)', padding: '36px 24px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 6 }}>No reservations yet</div>
-                    <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: '0 0 20px' }}>Make your first reservation and it will appear here.</p>
+                    <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 6 }}>No upcoming reservations</div>
+                    <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: '0 0 20px' }}>Make a reservation and it will appear here.</p>
                     <button className="btn btn-primary" onClick={() => navigate('/book')}>Reserve a suite <Icon name="arrow_right" size={12} /></button>
                   </div>
                 )}
-                {!resLoading && reservations.length > 0 && (
+                {!resLoading && displayStays.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {reservations.slice(0, 3).map(r => {
+                    {displayStays.map(r => {
                       const cancellable  = ['pending', 'confirmed'].includes(r.status);
                       const isCancelling = cancellingId === r._id;
                       return (
@@ -753,7 +913,7 @@ export default function GuestPortalPage() {
                             <StatusBadge status={r.status} />
                           </div>
                           {cancellable && (
-                            <div style={{ borderTop: '1px solid var(--hairline-2)', padding: '8px 20px', display: 'flex', justifyContent: 'flex-end' }}>
+                            <div style={{ borderTop: '1px solid var(--hairline-2)', padding: '8px 20px' }}>
                               <button onClick={() => handleCancelReservation(r._id)} disabled={isCancelling} style={{ background: 'none', border: 'none', cursor: isCancelling ? 'not-allowed' : 'pointer', fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--terracotta)', display: 'flex', alignItems: 'center', gap: 6, opacity: isCancelling ? 0.6 : 1, padding: '4px 0', fontWeight: 600 }}>
                                 {isCancelling ? <><div className="spinner" style={{ width: 11, height: 11, borderWidth: 1.5, borderTopColor: 'var(--terracotta)' }} />Cancelling…</> : <><Icon name="x" size={11} />Cancel reservation</>}
                               </button>
@@ -886,6 +1046,61 @@ export default function GuestPortalPage() {
                 <button className="btn btn-primary" onClick={() => navigate('/book')}>Reserve a suite <Icon name="arrow_right" size={12} /></button>
                 <button className="btn btn-ghost"   onClick={() => navigate('/suites')}>View suites</button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Past stays & feedback — always visible when checked-out stays exist ── */}
+        {!resLoading && pastStays.length > 0 && (
+          <div style={{ marginTop: 64, borderTop: '1px solid var(--hairline)', paddingTop: 48 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 24 }}>
+              <div>
+                <div className="eyebrow" style={{ marginBottom: 8 }}>Stay history</div>
+                <h2 className="display" style={{ fontSize: 36, margin: 0 }}>Past <em>visits.</em></h2>
+              </div>
+              <span style={{ fontSize: 12, color: 'var(--mute)', fontWeight: 500 }}>{pastStays.length} completed stay{pastStays.length !== 1 ? 's' : ''}</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {pastStays.map(r => {
+                const canFeedback = !r.hasFeedback;
+                const label = TYPE_LABEL[r.room?.type] || r.room?.type || 'Suite';
+                return (
+                  <div key={r._id} style={{ border: '1px solid var(--hairline)', background: 'var(--paper)' }}>
+                    <div style={{ padding: '18px 22px', display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'center' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 5 }}>
+                          <Icon name="bed" size={13} style={{ color: 'var(--brass)' }} />
+                          <span style={{ fontWeight: 600, fontSize: 14 }}>{r.room?.number ? `Room ${r.room.number}` : 'Room TBA'}</span>
+                          <span style={{ fontSize: 13, color: 'var(--ink-3)', fontWeight: 500 }}>· {label}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 20, fontSize: 13, color: 'var(--ink-3)', flexWrap: 'wrap', fontWeight: 500 }}>
+                          <span>{fmtDate(r.checkIn)} → {fmtDate(r.checkOut)}</span>
+                          {r.nights && <span>{r.nights} night{r.nights !== 1 ? 's' : ''}</span>}
+                          {r.totalAmount != null && <span>€{Number(r.totalAmount).toLocaleString()}</span>}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                        <StatusBadge status={r.status} />
+                        {canFeedback ? (
+                          <button
+                            onClick={() => setFeedbackTarget(r)}
+                            style={{ background: 'var(--linen)', border: '1px solid var(--brass-soft, #D4B896)', cursor: 'pointer', fontSize: 12, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--brass-deep)', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', fontWeight: 600 }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--paper)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'var(--linen)'}
+                          >
+                            <Icon name="star" size={11} />Rate your stay
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: 12, color: 'var(--mute)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <Icon name="check" size={11} />Reviewed
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

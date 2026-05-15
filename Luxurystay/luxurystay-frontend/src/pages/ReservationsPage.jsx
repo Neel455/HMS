@@ -40,6 +40,10 @@ function getInitials(first = '', last = '') {
   return ((first[0] || '') + (last[0] || '')).toUpperCase() || '?';
 }
 
+function newestCreatedFirst(a, b) {
+  return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+}
+
 function isoDate(d) {
   return d.toISOString().slice(0, 10);
 }
@@ -373,10 +377,9 @@ function NewReservationModal({ onClose, onCreated }) {
 
 // ─── Reservation Detail Panel ─────────────────────────────────────────────────
 
-function ReservationDetail({ reservation: r, onClose, onCancelled, onStatusChanged }) {
+function ReservationDetail({ reservation: r, onClose, onCancelled }) {
   const toast   = useToast();
   const [cancelling,   setCancelling]   = useState(false);
-  const [actioning,    setActioning]    = useState(false);
 
   async function cancel() {
     if (!window.confirm(`Cancel reservation ${r.bookingId}?`)) return;
@@ -388,28 +391,6 @@ function ReservationDetail({ reservation: r, onClose, onCancelled, onStatusChang
     } catch (err) {
       toast.error(err.response?.data?.message || 'Could not cancel reservation.');
     } finally { setCancelling(false); }
-  }
-
-  async function handleCheckIn() {
-    setActioning(true);
-    try {
-      await api.patch(`/api/reservations/${r.id}/checkin`);
-      toast.success(`${guestName} checked in to room ${r.room?.roomNumber || ''}.`);
-      onStatusChanged();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Check-in failed.');
-    } finally { setActioning(false); }
-  }
-
-  async function handleCheckOut() {
-    setActioning(true);
-    try {
-      await api.patch(`/api/reservations/${r.id}/checkout`);
-      toast.success(`${guestName} checked out successfully.`);
-      onStatusChanged();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Check-out failed.');
-    } finally { setActioning(false); }
   }
 
   const guestName = r.guest
@@ -472,40 +453,11 @@ function ReservationDetail({ reservation: r, onClose, onCancelled, onStatusChang
         </div>
 
         {/* Footer actions */}
-        {!['checked-out', 'cancelled'].includes(r.status) && (
+        {['pending', 'confirmed'].includes(r.status) && (
           <div style={{ padding: '20px 32px', borderTop: '1px solid var(--hairline)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {/* Check-in */}
-            {['pending', 'confirmed'].includes(r.status) && (
-              <button
-                className="btn btn-primary"
-                onClick={handleCheckIn}
-                disabled={actioning}
-                style={{ justifyContent: 'center', opacity: actioning ? 0.7 : 1 }}
-              >
-                {actioning
-                  ? <><div className="spinner" style={{ width: 13, height: 13, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Processing…</>
-                  : <><Icon name="key" size={13} />Issue keys · Check in</>}
-              </button>
-            )}
-            {/* Check-out */}
-            {r.status === 'checked-in' && (
-              <button
-                className="btn btn-primary"
-                onClick={handleCheckOut}
-                disabled={actioning}
-                style={{ justifyContent: 'center', opacity: actioning ? 0.7 : 1 }}
-              >
-                {actioning
-                  ? <><div className="spinner" style={{ width: 13, height: 13, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Processing…</>
-                  : <><Icon name="logout" size={13} />Settle folio · Check out</>}
-              </button>
-            )}
-            {/* Cancel */}
-            {['pending', 'confirmed'].includes(r.status) && (
-              <button className="btn btn-ghost btn-sm" onClick={cancel} disabled={cancelling} style={{ justifyContent: 'center' }}>
-                {cancelling ? <><div className="spinner" style={{ width: 12, height: 12, borderWidth: 1.5 }} />Cancelling…</> : <><Icon name="x" size={12} />Cancel reservation</>}
-              </button>
-            )}
+            <button className="btn btn-ghost btn-sm" onClick={cancel} disabled={cancelling} style={{ justifyContent: 'center' }}>
+              {cancelling ? <><div className="spinner" style={{ width: 12, height: 12, borderWidth: 1.5 }} />Cancelling…</> : <><Icon name="x" size={12} />Cancel reservation</>}
+            </button>
           </div>
         )}
       </div>
@@ -524,29 +476,32 @@ function DetailRow({ label, value, mono }) {
 
 // ─── List View ────────────────────────────────────────────────────────────────
 
-function ReservationList({ onSelect }) {
+function ReservationList({ onSelect, refreshKey }) {
   const [statusFilter, setStatusFilter] = useState('');
   const [guestSearch, setGuestSearch]   = useState('');
   const [page, setPage]   = useState(1);
   const limit = 15;
 
-  const params = new URLSearchParams({ page, limit, sort: 'checkIn' });
+  const params = new URLSearchParams({ page, limit, sort: 'newest' });
   if (statusFilter) params.set('status', statusFilter);
   if (guestSearch.trim()) params.set('search', guestSearch.trim());
 
-  const { data, loading, refetch } = useApi(`/api/reservations?${params}`, { defaultData: { reservations: [], pagination: {} } });
+  const { data, loading } = useApi(`/api/reservations?${params}`, {
+    defaultData: { reservations: [], pagination: {} },
+    deps: [refreshKey],
+  });
   const reservations = data?.reservations || [];
   const pagination   = data?.pagination   || {};
 
   useEffect(() => { setPage(1); }, [statusFilter, guestSearch]);
 
   const normalizedSearch = guestSearch.trim().toLowerCase();
-  const visibleReservations = normalizedSearch
+  const visibleReservations = (normalizedSearch
     ? reservations.filter(r => {
         const name = `${r.guest?.firstName || ''} ${r.guest?.lastName || ''}`.trim().toLowerCase();
         return name.includes(normalizedSearch);
       })
-    : reservations;
+    : [...reservations]).sort(newestCreatedFirst);
 
   return (
     <>
@@ -662,7 +617,7 @@ const STATUS_BAR_COLORS = {
   'cancelled':   { bg: 'var(--hairline-2)',      text: 'var(--mute)',       border: 'var(--mute-2)' },
 };
 
-function ReservationCalendar({ onSelect }) {
+function ReservationCalendar({ onSelect, refreshKey }) {
   const [weekStart, setWeekStart] = useState(() => weekMondayOf(new Date()));
   const weekEnd = addDays(weekStart, 6);
 
@@ -673,7 +628,10 @@ function ReservationCalendar({ onSelect }) {
     sort: 'checkIn',
   });
 
-  const { data, loading } = useApi(`/api/reservations?${params}`, { defaultData: { reservations: [] } });
+  const { data, loading } = useApi(`/api/reservations?${params}`, {
+    defaultData: { reservations: [] },
+    deps: [refreshKey],
+  });
   const reservations = data?.reservations || [];
 
   // Collect unique rooms that appear in the fetched reservations
@@ -821,11 +779,6 @@ export default function ReservationsPage() {
     setRefreshKey(k => k + 1);
   }
 
-  function handleStatusChanged() {
-    setSelected(null);
-    setRefreshKey(k => k + 1);
-  }
-
   return (
     <div>
       {/* ── Header ── */}
@@ -848,8 +801,8 @@ export default function ReservationsPage() {
 
       {/* ── Content ── */}
       {view === 'list'
-        ? <ReservationList key={refreshKey} onSelect={setSelected} />
-        : <ReservationCalendar key={refreshKey} onSelect={setSelected} />
+        ? <ReservationList onSelect={setSelected} refreshKey={refreshKey} />
+        : <ReservationCalendar onSelect={setSelected} refreshKey={refreshKey} />
       }
 
       {/* ── Modals ── */}
@@ -861,7 +814,6 @@ export default function ReservationsPage() {
           reservation={selected}
           onClose={() => setSelected(null)}
           onCancelled={handleCancelled}
-          onStatusChanged={handleStatusChanged}
         />
       )}
     </div>

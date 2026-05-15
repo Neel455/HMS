@@ -141,37 +141,21 @@ export default function AnalyticsPage() {
   const [period, setPeriod] = useState('month');
 
   // Parallel API calls
-  const { data: dashData, loading: dashLoading }       = useApi('/api/reports/dashboard');
-  const { data: revData,  loading: revLoading }        = useApi(`/api/reports/revenue?period=${period}`);
-  const { data: occData,  loading: occLoading }        = useApi(`/api/reports/occupancy?period=${period}`, { deps: [period] });
-  const { data: roomData, loading: roomLoading }       = useApi('/api/reports/room-performance');
-  const { data: guestData, loading: guestLoading }     = useApi('/api/reports/guests');
+  const { data: dashData, loading: dashLoading }   = useApi('/api/reports/dashboard');
+  const { data: revData,  loading: revLoading }    = useApi(`/api/reports/revenue?period=${period}`, { deps: [period] });
+  const { data: occData,  loading: occLoading }    = useApi(`/api/reports/occupancy?period=${period}`, { deps: [period] });
+  const { data: roomData, loading: roomLoading }   = useApi('/api/reports/room-performance');
+  const { data: guestData, loading: guestLoading } = useApi('/api/reports/guests');
 
   const metrics    = dashData?.metrics    || {};
-  const revSeries  = revData?.series      || revData?.dailyRevenue || [];
-  const occSeries  = occData?.series      || occData?.daily        || [];
-  const roomPerf   = roomData?.rooms      || roomData?.performance || [];
-  const guestStats = guestData?.stats     || guestData            || {};
+  const revSeries  = revData?.series      || [];
+  const occSeries  = occData?.series      || [];
+  const roomPerf   = roomData?.performance || [];
+  const guestStats = guestData            || {};
 
-  // Revenue by category — derive from room performance or use fallback
-  const revByCategory = revData?.byCategory || [
-    { label: 'Rooms',       pct: 68, color: 'var(--ink)' },
-    { label: 'Dining',      pct: 15, color: 'var(--brass)' },
-    { label: 'Spa',         pct: 9,  color: 'var(--sage)' },
-    { label: 'Bar & cellar',pct: 5,  color: 'var(--terracotta)' },
-    { label: 'Other',       pct: 3,  color: 'var(--mute-2)' },
-  ];
-
-  // Booking source breakdown
-  const sources = guestStats.sources || [
-    { label: 'Direct',          pct: 52 },
-    { label: 'Concierge/agent', pct: 21 },
-    { label: 'Repeat guest',    pct: 18 },
-    { label: 'Travel partners', pct: 9  },
-  ];
-
-  // Guest origin
-  const nationalities = guestStats.nationalities || guestStats.topNationalities || [];
+  const revByCategory = revData?.byCategory || [];
+  const sources       = guestStats.sources       || [];
+  const nationalities = guestStats.nationalities || [];
 
   const loading = dashLoading || revLoading;
 
@@ -205,10 +189,10 @@ export default function AnalyticsPage() {
           Array.from({ length: 4 }).map((_, i) => <div key={i} style={{ background: 'var(--paper)', padding: '20px 24px', height: 88 }} />)
         ) : (
           <>
-            <Mini label="Total revenue · YTD"    value={fmtCurrency(metrics.revenueYTD   || metrics.totalRevenue)} />
-            <Mini label="Avg. occupancy"          value={fmtPct(metrics.occupancyPct)} />
-            <Mini label="ADR"                     value={fmtCurrency(metrics.adr)} />
-            <Mini label="RevPAR"                  value={fmtCurrency(metrics.revpar)} />
+            <Mini label="Total revenue · YTD" value={fmtCurrency(metrics.revenueYTD)} />
+            <Mini label="Avg. occupancy"       value={fmtPct(metrics.occupancyPct)} />
+            <Mini label="ADR"                  value={fmtCurrency(metrics.adr)} />
+            <Mini label="RevPAR"               value={fmtCurrency(metrics.revpar)} />
           </>
         )}
       </div>
@@ -230,15 +214,20 @@ export default function AnalyticsPage() {
         <div>
           <SectionHead title="Revenue by category" caption="this period" />
           <div className="card" style={{ padding: 28 }}>
-            {revByCategory.map((row, i) => (
-              <BarRow
-                key={i}
-                label={row.label || row.category}
-                value={row.amount ? fmtCurrency(row.amount) : `${row.pct}%`}
-                pct={row.pct || (row.amount && revData?.totalRevenue ? (row.amount / revData.totalRevenue) * 100 : 0)}
-                color={row.color || 'var(--brass)'}
-              />
-            ))}
+            {revLoading
+              ? <Spinner />
+              : revByCategory.length
+                ? revByCategory.map((row, i) => (
+                    <BarRow
+                      key={i}
+                      label={row.label}
+                      value={fmtCurrency(row.amount)}
+                      pct={row.pct}
+                      color={['var(--ink)', 'var(--brass)', 'var(--sage)', 'var(--terracotta)', 'var(--mute-2)'][i % 5]}
+                    />
+                  ))
+                : <div style={{ fontSize: 12, color: 'var(--mute)', paddingTop: 8 }}>No data for this period.</div>
+            }
           </div>
         </div>
       </div>
@@ -284,17 +273,7 @@ export default function AnalyticsPage() {
                     border={i < Math.min(roomPerf.length, 5) - 1}
                   />
                 ))
-              : (
-                // Static fallback matching design
-                [
-                  { t: 'Premier Suite', o: '—', r: '—' },
-                  { t: 'Penthouse',     o: '—', r: '—' },
-                  { t: 'Junior Suite',  o: '—', r: '—' },
-                  { t: 'Deluxe King',   o: '—', r: '—' },
-                ].map((r, i, arr) => (
-                  <TableRow key={i} label={r.t} values={[r.o, r.r]} border={i < arr.length - 1} />
-                ))
-              )
+              : <div style={{ fontSize: 12, color: 'var(--mute)', paddingTop: 8 }}>No stay data for this period.</div>
           }
         </div>
 
@@ -303,17 +282,19 @@ export default function AnalyticsPage() {
           <div className="eyebrow" style={{ marginBottom: 14 }}>Booking source</div>
           {guestLoading
             ? <Spinner />
-            : sources.map((s, i) => (
-                <div key={i} style={{ marginBottom: 14 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-                    <span>{s.label || s.source}</span>
-                    <span className="mono">{s.pct != null ? `${s.pct}%` : (s.count || '—')}</span>
+            : sources.length
+              ? sources.map((s, i) => (
+                  <div key={i} style={{ marginBottom: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                      <span>{s.label}</span>
+                      <span className="mono">{s.pct != null ? `${s.pct}%` : s.count}</span>
+                    </div>
+                    <div style={{ height: 3, background: 'var(--hairline-2)', borderRadius: 2 }}>
+                      <div style={{ height: '100%', width: `${s.pct || 0}%`, background: 'var(--brass)', borderRadius: 2 }} />
+                    </div>
                   </div>
-                  <div style={{ height: 3, background: 'var(--hairline-2)', borderRadius: 2 }}>
-                    <div style={{ height: '100%', width: `${s.pct || 0}%`, background: 'var(--brass)', borderRadius: 2 }} />
-                  </div>
-                </div>
-              ))
+                ))
+              : <div style={{ fontSize: 12, color: 'var(--mute)', paddingTop: 8 }}>No booking data yet.</div>
           }
         </div>
 
@@ -324,19 +305,12 @@ export default function AnalyticsPage() {
             ? <Spinner />
             : nationalities.length
               ? nationalities.slice(0, 5).map((n, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: i < 4 ? '1px solid var(--hairline-2)' : 'none', fontSize: 12 }}>
-                    <span>{n.nationality || n.country || '—'}</span>
-                    <span className="mono">{n.pct != null ? `${n.pct}%` : (n.count || '—')}</span>
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: i < Math.min(nationalities.length, 5) - 1 ? '1px solid var(--hairline-2)' : 'none', fontSize: 12 }}>
+                    <span>{n.nationality || '—'}</span>
+                    <span className="mono">{n.pct != null ? `${n.pct}%` : n.count}</span>
                   </div>
                 ))
-              : (
-                [{ c: 'France', p: '—' }, { c: 'United Kingdom', p: '—' }, { c: 'United States', p: '—' }, { c: 'Germany', p: '—' }, { c: 'Other', p: '—' }]
-                  .map((n, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: i < 4 ? '1px solid var(--hairline-2)' : 'none', fontSize: 12 }}>
-                      <span>{n.c}</span><span className="mono">{n.p}</span>
-                    </div>
-                  ))
-              )
+              : <div style={{ fontSize: 12, color: 'var(--mute)', paddingTop: 8 }}>No nationality data yet.</div>
           }
         </div>
       </div>

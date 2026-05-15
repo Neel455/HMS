@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApi } from '../hooks/useApi';
 import { useToast } from '../context/ToastContext';
 import api from '../lib/api';
@@ -101,15 +102,23 @@ function FeedbackCard({ item, onSelect, isActive }) {
   );
 }
 
-// ─── Detail Panel ─────────────────────────────────────────────────────────────
+// ─── Detail Sidebar ───────────────────────────────────────────────────────────
 
 function FeedbackDetail({ item, onClose, onUpdated }) {
-  const toast = useToast();
-  const [response,    setResponse]    = useState(item.staffResponse || '');
-  const [actionNote,  setActionNote]  = useState(item.actionNote    || '');
-  const [actionFlag,  setActionFlag]  = useState(item.actionRequired);
-  const [tab,         setTab]         = useState('response');
-  const [saving,      setSaving]      = useState(false);
+  const toast    = useToast();
+  const navigate = useNavigate();
+
+  const [response,   setResponse]   = useState(item.staffResponse || '');
+  const [actionNote, setActionNote] = useState(item.actionNote    || '');
+  const [actionFlag, setActionFlag] = useState(item.actionRequired);
+  const [tab,        setTab]        = useState('response');
+  const [saving,     setSaving]     = useState(false);
+
+  // Lock body scroll while open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
 
   const name   = guestName(item);
   const rating = item.ratings?.overall || 0;
@@ -119,7 +128,7 @@ function FeedbackDetail({ item, onClose, onUpdated }) {
     if (!response.trim()) { toast.error('Response cannot be empty.'); return; }
     setSaving(true);
     try {
-      await api.patch(`/api/feedback/${item._id}/respond`, { staffResponse: response });
+      await api.patch(`/api/feedback/${item.id || item._id}/respond`, { staffResponse: response });
       toast.success('Response saved.');
       onUpdated();
     } catch (err) {
@@ -130,7 +139,7 @@ function FeedbackDetail({ item, onClose, onUpdated }) {
   async function handleAction() {
     setSaving(true);
     try {
-      await api.patch(`/api/feedback/${item._id}/action`, {
+      await api.patch(`/api/feedback/${item.id || item._id}/action`, {
         actionRequired: actionFlag,
         actionNote: actionNote || undefined,
       });
@@ -141,114 +150,158 @@ function FeedbackDetail({ item, onClose, onUpdated }) {
     } finally { setSaving(false); }
   }
 
+  function handleViewGuest() {
+    navigate(`/guests?search=${encodeURIComponent(name)}`);
+  }
+
+  const hasSubRatings = item.ratings?.cleanliness || item.ratings?.service || item.ratings?.comfort || item.ratings?.value;
+
   return (
-    <div className="card" style={{ padding: 28, position: 'sticky', top: 24 }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-        <div>
-          <div className="eyebrow" style={{ marginBottom: 4 }}>Room {room} · {fmtDate(item.createdAt)}</div>
-          <h2 className="display" style={{ fontSize: 24, margin: 0 }}>{name}</h2>
-        </div>
-        <button className="btn btn-ghost btn-sm" onClick={onClose}><Icon name="close" size={14} /></button>
-      </div>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 300, display: 'flex', justifyContent: 'flex-end' }}>
+      {/* Backdrop */}
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(26,24,20,0.4)' }} />
 
-      <Stars rating={rating} size={18} />
-
-      {/* Sub-ratings */}
-      {(item.ratings?.cleanliness || item.ratings?.service || item.ratings?.comfort || item.ratings?.value) && (
-        <div style={{ marginTop: 16, marginBottom: 16 }}>
-          <SubRatingRow label="Cleanliness" value={item.ratings.cleanliness} />
-          <SubRatingRow label="Service"     value={item.ratings.service} />
-          <SubRatingRow label="Comfort"     value={item.ratings.comfort} />
-          <SubRatingRow label="Value"       value={item.ratings.value} />
-        </div>
-      )}
-
-      {item.npsScore != null && (
-        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--mute)' }}>
-          NPS score: <span className="numeral" style={{ fontSize: 16, color: 'var(--ink)' }}>{item.npsScore}</span>/10
-        </div>
-      )}
-
-      {/* Comment */}
-      {item.comment && (
-        <>
-          <div className="rule" style={{ margin: '16px 0' }}><div className="dot" /></div>
-          <div style={{ fontFamily: 'var(--serif)', fontSize: 20, lineHeight: 1.45, fontStyle: 'italic', color: 'var(--ink)' }}>
-            "{item.comment}"
+      {/* Sidebar panel */}
+      <div style={{
+        position: 'relative', width: 440, background: 'var(--paper)',
+        borderLeft: '1px solid var(--hairline)', height: '100%',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+      }}>
+        {/* Header */}
+        <div style={{ padding: '24px 28px 18px', borderBottom: '1px solid var(--hairline)', flexShrink: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+            <div>
+              <div className="eyebrow" style={{ marginBottom: 4 }}>Room {room} · {fmtDate(item.createdAt)}</div>
+              <h2 className="display" style={{ fontSize: 26, margin: 0 }}>{name}</h2>
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={onClose}><Icon name="close" size={14} /></button>
           </div>
-        </>
-      )}
 
-      <div className="rule" style={{ margin: '20px 0 16px' }}><div className="dot" /></div>
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--hairline)', marginBottom: 16 }}>
-        {[{ id: 'response', label: 'Respond' }, { id: 'action', label: 'Action flag' }].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            style={{ padding: '8px 16px', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', background: 'none', border: 'none', cursor: 'pointer', color: tab === t.id ? 'var(--ink)' : 'var(--mute)', borderBottom: tab === t.id ? '2px solid var(--ink)' : '2px solid transparent', marginBottom: -1 }}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'response' && (
-        <>
-          <div className="field" style={{ marginBottom: 12 }}>
-            <label>Staff response</label>
-            <textarea
-              value={response}
-              onChange={e => setResponse(e.target.value)}
-              style={{ minHeight: 96, resize: 'vertical' }}
-              placeholder="Write a personal response to this guest…"
-            />
+          {/* Overall stars */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <Stars rating={rating} size={20} />
+            <span className="numeral" style={{ fontSize: 22, fontStyle: 'italic' }}>{rating.toFixed(1)}</span>
+            {item.npsScore != null && (
+              <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--mute)', fontWeight: 500 }}>
+                NPS <span className="numeral" style={{ fontSize: 15, color: 'var(--ink)' }}>{item.npsScore}</span>/10
+              </span>
+            )}
           </div>
-          {item.respondedAt && (
-            <div style={{ fontSize: 11, color: 'var(--mute)', marginBottom: 12 }}>
-              Last responded {fmtDate(item.respondedAt)} by {item.respondedBy?.name || '—'}
+
+          {/* Sub-ratings */}
+          {hasSubRatings && (
+            <div style={{ marginBottom: 4 }}>
+              <SubRatingRow label="Cleanliness" value={item.ratings.cleanliness} />
+              <SubRatingRow label="Service"     value={item.ratings.service}     />
+              <SubRatingRow label="Comfort"     value={item.ratings.comfort}     />
+              <SubRatingRow label="Value"       value={item.ratings.value}       />
             </div>
           )}
-          <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}
-            onClick={handleRespond} disabled={saving}>
-            {saving
-              ? <><div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Saving…</>
-              : 'Save response'}
-          </button>
-        </>
-      )}
 
-      {tab === 'action' && (
-        <>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, cursor: 'pointer', fontSize: 13 }}>
-            <span style={{
-              width: 18, height: 18, border: '1px solid var(--ink-3)', borderRadius: 2, flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: actionFlag ? 'var(--ink)' : 'transparent',
-            }} onClick={() => setActionFlag(v => !v)}>
-              {actionFlag && <Icon name="check" size={10} style={{ color: 'var(--paper)' }} />}
-            </span>
-            Flag as requiring action
-          </label>
-          <div className="field" style={{ marginBottom: 12 }}>
-            <label>Action note</label>
-            <textarea
-              value={actionNote}
-              onChange={e => setActionNote(e.target.value)}
-              style={{ minHeight: 72, resize: 'vertical' }}
-              placeholder="Describe the follow-up required…"
-            />
-          </div>
-          {item.actionedAt && (
-            <div style={{ fontSize: 11, color: 'var(--mute)', marginBottom: 12 }}>
-              Last actioned {fmtDate(item.actionedAt)} by {item.actionedBy?.name || '—'}
+          {/* View guest button */}
+          <button
+            onClick={handleViewGuest}
+            className="btn btn-ghost btn-sm"
+            style={{ marginTop: 12, width: '100%', justifyContent: 'center' }}
+          >
+            <Icon name="user" size={12} />
+            View guest profile
+            <Icon name="arrow_right" size={11} />
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
+          {/* Comment */}
+          {item.comment && (
+            <>
+              <div className="eyebrow" style={{ marginBottom: 10 }}>Guest comment</div>
+              <div style={{
+                fontFamily: 'var(--serif)', fontSize: 18, lineHeight: 1.55,
+                fontStyle: 'italic', color: 'var(--ink)',
+                padding: '16px 18px', background: 'var(--linen)',
+                borderLeft: '3px solid var(--brass)', marginBottom: 24,
+              }}>
+                "{item.comment}"
+              </div>
+            </>
+          )}
+
+          {item.actionRequired && (
+            <div style={{ padding: '10px 14px', background: '#FBE8E8', borderLeft: '3px solid var(--terracotta)', marginBottom: 20, fontSize: 13, color: 'var(--terracotta)', fontWeight: 500 }}>
+              Action required{item.actionNote ? `: ${item.actionNote}` : ''}
             </div>
           )}
-          <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}
-            onClick={handleAction} disabled={saving}>
-            {saving ? 'Saving…' : 'Update action flag'}
-          </button>
-        </>
-      )}
+
+          {/* Tabs */}
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--hairline)', marginBottom: 18 }}>
+            {[{ id: 'response', label: 'Staff response' }, { id: 'action', label: 'Action flag' }].map(t => (
+              <button key={t.id} onClick={() => setTab(t.id)}
+                style={{ padding: '8px 16px', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', background: 'none', border: 'none', cursor: 'pointer', color: tab === t.id ? 'var(--ink)' : 'var(--mute)', borderBottom: tab === t.id ? '2px solid var(--ink)' : '2px solid transparent', marginBottom: -1 }}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {tab === 'response' && (
+            <>
+              <div className="field" style={{ marginBottom: 12 }}>
+                <label>Staff response</label>
+                <textarea
+                  value={response}
+                  onChange={e => setResponse(e.target.value)}
+                  style={{ minHeight: 96, resize: 'vertical' }}
+                  placeholder="Write a personal response to this guest…"
+                />
+              </div>
+              {item.respondedAt && (
+                <div style={{ fontSize: 11, color: 'var(--mute)', marginBottom: 12 }}>
+                  Last responded {fmtDate(item.respondedAt)} by {item.respondedBy?.name || '—'}
+                </div>
+              )}
+              <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}
+                onClick={handleRespond} disabled={saving}>
+                {saving
+                  ? <><div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5, borderTopColor: 'var(--ivory)' }} />Saving…</>
+                  : 'Save response'}
+              </button>
+            </>
+          )}
+
+          {tab === 'action' && (
+            <>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, cursor: 'pointer', fontSize: 13 }}>
+                <span style={{
+                  width: 18, height: 18, border: '1px solid var(--ink-3)', borderRadius: 2, flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: actionFlag ? 'var(--ink)' : 'transparent',
+                }} onClick={() => setActionFlag(v => !v)}>
+                  {actionFlag && <Icon name="check" size={10} style={{ color: 'var(--paper)' }} />}
+                </span>
+                Flag as requiring action
+              </label>
+              <div className="field" style={{ marginBottom: 12 }}>
+                <label>Action note</label>
+                <textarea
+                  value={actionNote}
+                  onChange={e => setActionNote(e.target.value)}
+                  style={{ minHeight: 72, resize: 'vertical' }}
+                  placeholder="Describe the follow-up required…"
+                />
+              </div>
+              {item.actionedAt && (
+                <div style={{ fontSize: 11, color: 'var(--mute)', marginBottom: 12 }}>
+                  Last actioned {fmtDate(item.actionedAt)} by {item.actionedBy?.name || '—'}
+                </div>
+              )}
+              <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}
+                onClick={handleAction} disabled={saving}>
+                {saving ? 'Saving…' : 'Update action flag'}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -461,34 +514,31 @@ export default function FeedbackPage() {
       {loading ? (
         <div style={{ padding: 60 }}><Spinner page /></div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: selected ? '1.4fr 1fr' : 'repeat(2, 1fr)', gap: selected ? 32 : 20, alignItems: 'start' }}>
-          {/* Cards grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: selected ? '1fr' : 'repeat(2, 1fr)', gap: 20 }}>
-            {!feedbacks.length ? (
-              <div style={{ gridColumn: '1/-1', padding: '40px 0', textAlign: 'center', color: 'var(--mute)', fontSize: 13 }}>
-                No feedback found.
-              </div>
-            ) : (
-              feedbacks.map(f => (
-                <FeedbackCard
-                  key={f._id}
-                  item={f}
-                  onSelect={setSelected}
-                  isActive={selected?._id === f._id}
-                />
-              ))
-            )}
-          </div>
-
-          {/* Detail panel */}
-          {selected && (
-            <FeedbackDetail
-              item={selected}
-              onClose={() => setSelected(null)}
-              onUpdated={onUpdated}
-            />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 20 }}>
+          {!feedbacks.length ? (
+            <div style={{ gridColumn: '1/-1', padding: '40px 0', textAlign: 'center', color: 'var(--mute)', fontSize: 13 }}>
+              No feedback found.
+            </div>
+          ) : (
+            feedbacks.map(f => (
+              <FeedbackCard
+                key={f.id || f._id}
+                item={f}
+                onSelect={setSelected}
+                isActive={(selected?.id || selected?._id) === (f.id || f._id)}
+              />
+            ))
           )}
         </div>
+      )}
+
+      {/* Detail sidebar — fixed overlay */}
+      {selected && (
+        <FeedbackDetail
+          item={selected}
+          onClose={() => setSelected(null)}
+          onUpdated={onUpdated}
+        />
       )}
 
       {/* Pagination */}

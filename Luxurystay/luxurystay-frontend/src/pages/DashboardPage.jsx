@@ -4,6 +4,7 @@ import { useApi } from '../hooks/useApi';
 import { useAuth } from '../context/AuthContext';
 import Icon from '../components/Icon';
 import Spinner from '../components/Spinner';
+import MetricTile from '../components/MetricTile';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -46,22 +47,7 @@ function fmtShortDate(iso) {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function MetricTile({ label, value, delta, up, loading }) {
-  return (
-    <div className="metric" style={{ borderRight: 'none', borderBottom: 'none', borderTop: 'none', borderLeft: 'none' }}>
-      <div className="label">{label}</div>
-      {loading
-        ? <div style={{ marginTop: 16 }}><Spinner /></div>
-        : <div className="val numeral">{value}</div>}
-      {delta && !loading && (
-        <div className={`delta${up ? ' up' : ''}`}>
-          {up && <Icon name="arrow_up" size={12} />}
-          {delta}
-        </div>
-      )}
-    </div>
-  );
-}
+
 
 function SectionHead({ title, caption }) {
   return (
@@ -229,6 +215,32 @@ export default function DashboardPage() {
     ? (arrivalsData.expected?.length || 0) + (arrivalsData.checkedIn?.length || 0)
     : metrics.arrivalsToday;
 
+  const tiles = [
+  {
+    label: 'Occupancy',
+    value: `${metrics.occupancyPct ?? '—'}%`,
+    delta: totalRooms
+      ? `${totalRooms} total rooms`
+      : undefined,
+  },
+  {
+    label: 'ADR',
+    value: fmtCurrency(metrics.adr),
+  },
+  {
+    label: 'RevPAR',
+    value: fmtCurrency(metrics.revpar),
+  },
+  {
+    label: 'In-house guests',
+    value: metrics.inHouseGuests ?? '—',
+    delta:
+      totalArrivalCount != null
+        ? `${totalArrivalCount} arrivals · ${metrics.departuresToday ?? 0} departures`
+        : undefined,
+  },
+];
+
   return (
     <div>
       {/* ── Header ── */}
@@ -253,35 +265,25 @@ export default function DashboardPage() {
       </div>
 
       {/* ── KPI tiles ── */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
-        gap: 1, background: 'var(--hairline)', border: '1px solid var(--hairline)',
-      }}>
-        <MetricTile
-          label="Occupancy"
-          value={`${metrics.occupancyPct ?? '—'}%`}
-          delta={totalRooms ? `${totalRooms} total rooms` : undefined}
-          loading={dashLoading}
-        />
-        <MetricTile
-          label="ADR"
-          value={fmtCurrency(metrics.adr)}
-          loading={dashLoading}
-        />
-        <MetricTile
-          label="RevPAR"
-          value={fmtCurrency(metrics.revpar)}
-          loading={dashLoading}
-        />
-        <MetricTile
-          label="In-house guests"
-          value={metrics.inHouseGuests ?? '—'}
-          delta={totalArrivalCount != null
-            ? `${totalArrivalCount} arrivals · ${metrics.departuresToday ?? 0} departures`
-            : undefined}
-          loading={dashLoading}
-        />
-      </div>
+      <div
+  style={{
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: 1,
+    background: 'var(--hairline)',
+    border: '1px solid var(--hairline)',
+  }}
+>
+  {tiles.map((tile, i) => (
+    <MetricTile
+      key={i}
+      label={tile.label}
+      value={tile.value}
+      delta={tile.delta}
+      loading={dashLoading}
+    />
+  ))}
+</div>
 
       {/* ── Arrivals + Room status ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 32, marginTop: 40 }}>

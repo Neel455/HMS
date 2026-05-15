@@ -12,7 +12,11 @@
       "Bash(Get-ChildItem -Path \"E:\\\\aptech\\\\office\\\\Luxurystay\\\\luxurystay-frontend\\\\src\\\\pages\" -Filter \"*.jsx\")",
       "Bash(Select-Object Name)",
       "Bash(Sort-Object Name)",
-      "PowerShell(Test-Path \"E:\\\\aptech\\\\office\\\\Luxurystay\\\\luxurystay-frontend\\\\src\\\\pages\"; Get-ChildItem -Path \"E:\\\\aptech\\\\office\\\\Luxurystay\\\\luxurystay-frontend\\\\src\\\\pages\" -File | ForEach-Object { $_.Name })"
+      "PowerShell(Test-Path \"E:\\\\aptech\\\\office\\\\Luxurystay\\\\luxurystay-frontend\\\\src\\\\pages\"; Get-ChildItem -Path \"E:\\\\aptech\\\\office\\\\Luxurystay\\\\luxurystay-frontend\\\\src\\\\pages\" -File | ForEach-Object { $_.Name })",
+      "Bash(dir \"E:\\\\aptech\\\\office\\\\Luxurystay\\\\luxurystay-backend\\\\controllers\")",
+      "Bash(dir \"E:\\\\aptech\\\\office\\\\Luxurystay\\\\luxurystay-backend\\\\routes\")",
+      "Bash(dir E:\\\\aptech\\\\office\\\\Luxurystay\\\\luxurystay-frontend\\\\src\\\\pages *)",
+      "Bash(dir E:\\\\aptech\\\\office\\\\Luxurystay\\\\luxurystay-frontend\\\\src\\\\pages\\\\public *)"
     ]
   }
 }

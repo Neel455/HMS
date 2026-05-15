@@ -11,7 +11,7 @@ const { validateObjectId } = require('../utils/objectId');
 
 const populateReservation = (query) =>
   query
-    .populate('guest',     'firstName lastName email phone nationality idType idNumber isVIP totalStays')
+    .populate('guest',     'firstName lastName email phone nationality idType idNumber isVIP tier tierLabel totalStays lifetimeSpend')
     .populate('room',      'roomNumber floor type typeLabel view status rates')
     .populate('createdBy', 'name email role');
 
@@ -189,8 +189,8 @@ exports.checkOut = catchAsync(async (req, res, next) => {
     statusNote:       `Departure clean · ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`,
   });
 
-  // Increment guest's total stay count
-  await Guest.findByIdAndUpdate(reservation.guest, { $inc: { totalStays: 1 } });
+  // Recalculate guest stats (visits, lifetime spend, tier)
+  await Guest.recalcStats(reservation.guest);
 
   const populated = await populateReservation(Reservation.findById(reservation._id));
 

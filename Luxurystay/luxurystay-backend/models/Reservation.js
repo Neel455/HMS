@@ -3,6 +3,18 @@ const mongoose = require('mongoose');
 const STATUSES = ['pending', 'confirmed', 'checked-in', 'checked-out', 'cancelled'];
 const SOURCES  = ['direct', 'travel_agent', 'concierge', 'online_agent'];
 
+// Snapshot of the details entered at booking time — never changes after creation
+const bookingContactSchema = new mongoose.Schema(
+  {
+    firstName:   { type: String, trim: true, default: '' },
+    lastName:    { type: String, trim: true, default: '' },
+    email:       { type: String, trim: true, default: '' },
+    phone:       { type: String, trim: true, default: '' },
+    nationality: { type: String, trim: true, default: '' },
+  },
+  { _id: false }
+);
+
 const addOnSchema = new mongoose.Schema(
   {
     name:    { type: String, required: true, trim: true },
@@ -24,6 +36,8 @@ const reservationSchema = new mongoose.Schema(
       ref: 'Guest',
       required: [true, 'Guest is required.'],
     },
+    // Immutable snapshot of details entered at booking time
+    bookingContact: { type: bookingContactSchema, default: () => ({}) },
     room: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Room',
@@ -150,7 +164,7 @@ reservationSchema.virtual('nights').get(function () {
 });
 
 reservationSchema.virtual('addOnsTotal').get(function () {
-  return this.addOns.reduce((sum, a) => sum + a.price, 0);
+  return (this.addOns || []).reduce((sum, a) => sum + (a.price || 0), 0);
 });
 
 // ─── Indexes ──────────────────────────────────────────────────────────────────

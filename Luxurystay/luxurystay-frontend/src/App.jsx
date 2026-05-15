@@ -2,13 +2,13 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 import AppShell from './layouts/AppShell';
 import LoginPage from './pages/LoginPage';
-import GuestPortalPage from './pages/GuestPortalPage';
+import MyStayPage from './pages/public/MyStayPage';
 
 // Public pages
-import LandingPage       from './pages/public/LandingPage';
+import TheHousePage      from './pages/public/TheHousePage';
 import SuitesPage        from './pages/public/SuitesPage';
 import ContactPage       from './pages/public/ContactPage';
-import GuestBookPage     from './pages/public/GuestBookPage';
+import ReservePage       from './pages/public/ReservePage';
 import ConfirmationPage  from './pages/public/ConfirmationPage';
 import GuestSettingsPage from './pages/public/GuestSettingsPage';
 
@@ -29,7 +29,6 @@ import FeedbackPage from './pages/FeedbackPage';
 import AnalyticsPage   from './pages/AnalyticsPage';
 import SuitesAdminPage from './pages/SuitesAdminPage';
 import StaffPage       from './pages/StaffPage';
-import SettingsPage    from './pages/SettingsPage';
 
 const ADMIN_MGR = ['admin', 'manager'];
 const DESK      = ['admin', 'manager', 'receptionist'];
@@ -39,11 +38,25 @@ export default function App() {
   return (
     <Routes>
       {/* ── Fully public ─────────────────────────────────────────────── */}
-      <Route path="/"        element={<LandingPage />} />
+      <Route path="/"        element={<TheHousePage />} />
       <Route path="/suites"  element={<SuitesPage />} />
       <Route path="/contact" element={<ContactPage />} />
-      <Route path="/book"    element={<GuestBookPage />} />
-      <Route path="/confirm" element={<ConfirmationPage />} />
+      <Route
+        path="/book"
+        element={
+          <ProtectedRoute roles={['guest']}>
+            <ReservePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/confirm"
+        element={
+          <ProtectedRoute roles={['guest']}>
+            <ConfirmationPage />
+          </ProtectedRoute>
+        }
+      />
       <Route path="/login"   element={<LoginPage />} />
 
       {/* ── Guest portal — standalone (no staff sidebar) ─────────────── */}
@@ -51,7 +64,7 @@ export default function App() {
         path="/guest"
         element={
           <ProtectedRoute roles={['guest']}>
-            <GuestPortalPage />
+            <MyStayPage />
           </ProtectedRoute>
         }
       />
@@ -84,7 +97,6 @@ export default function App() {
         <Route path="/analytics" element={<ProtectedRoute roles={ADMIN_MGR}><AnalyticsPage /></ProtectedRoute>} />
         <Route path="/suite-types" element={<ProtectedRoute roles={['admin']}><SuitesAdminPage /></ProtectedRoute>} />
         <Route path="/staff"     element={<ProtectedRoute roles={['admin']}><StaffPage /></ProtectedRoute>} />
-        <Route path="/settings"  element={<ProtectedRoute roles={['admin']}><SettingsPage /></ProtectedRoute>} />
       </Route>
 
       {/* Catch-all */}

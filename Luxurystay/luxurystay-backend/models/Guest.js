@@ -126,5 +126,40 @@ guestSchema.pre('save', function (next) {
   next();
 });
 
+// ─── Tier thresholds ──────────────────────────────────────────────────────────
+// etoile : €15,000+ lifetime OR 15+ stays
+// or     : €5,000+  lifetime OR 8+  stays
+// argent : €1,000+  lifetime OR 3+  stays
+function deriveTier(lifetimeSpend, totalStays) {
+  if (lifetimeSpend >= 15000 || totalStays >= 15) return 'etoile';
+  if (lifetimeSpend >= 5000  || totalStays >= 8)  return 'or';
+  if (lifetimeSpend >= 1000  || totalStays >= 3)  return 'argent';
+  return 'none';
+}
+
+// ─── Static: recalculate visits, lifetime spend, tier for one guest ───────────
+guestSchema.statics.recalcStats = async function (guestId) {
+  const Reservation = mongoose.model('Reservation');
+  const Invoice     = mongoose.model('Invoice');
+
+  const [totalStays, paidInvoices] = await Promise.all([
+    Reservation.countDocuments({ guest: guestId, status: 'checked-out' }),
+    Invoice.find({ guest: guestId, paymentStatus: 'paid' }, 'totalAmount').lean(),
+  ]);
+
+  const lifetimeSpend = +paidInvoices
+    .reduce((sum, inv) => sum + (inv.totalAmount || 0), 0)
+    .toFixed(2);
+
+  const tier  = deriveTier(lifetimeSpend, totalStays);
+  const isVIP = tier === 'etoile';
+
+  return this.findByIdAndUpdate(
+    guestId,
+    { totalStays, lifetimeSpend, tier, isVIP },
+    { new: true, runValidators: false }
+  );
+};
+
 const Guest = mongoose.model('Guest', guestSchema);
 module.exports = Guest;

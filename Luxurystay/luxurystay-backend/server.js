@@ -82,9 +82,6 @@ app.use('/api/users', require('./routes/users'));
 // Module 3 — Guests
 app.use('/api/guests', require('./routes/guests'));
 
-// Property settings (singleton)
-app.use('/api/property', require('./routes/property'));
-
 // Module 4 — Rooms
 app.use('/api/rooms',  require('./routes/rooms'));
 app.use('/api/suites', require('./routes/suites'));
